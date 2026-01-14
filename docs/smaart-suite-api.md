@@ -120,6 +120,23 @@ All commands are sent as JSON objects over the WebSocket connection.
 }
 ```
 
+#### Compute Delay
+
+```json
+{
+  "action": "compute_delay"
+}
+```
+
+#### Active Trace Visibility
+
+```json
+{
+  "action": "active_trace",
+  "visible": true
+}
+```
+
 **Common Parameters:**
 - `resolution`: FFT resolution (512, 1024, 2048, 4096, etc.)
 - `averaging`: Averaging mode and speed

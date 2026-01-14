@@ -129,6 +129,14 @@ export class SDClient {
         });
     }
 
+    public sendToPropertyInspector(context: string, payload: any) {
+        this.send({
+            event: 'sendToPropertyInspector',
+            context,
+            payload,
+        });
+    }
+
     public showAlert(context: string) {
         this.send({
             event: 'showAlert',

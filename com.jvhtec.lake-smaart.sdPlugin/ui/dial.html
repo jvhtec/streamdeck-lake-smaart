@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Dial Property Inspector</title>
+    <link rel="stylesheet" href="sdpi.css">
+</head>
+
+<body>
+    <div class="sdpi-wrapper">
+        <div class="sdpi-heading">Target</div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Device</div>
+            <select class="sdpi-item-value select" id="deviceId" onchange="saveSettings()"></select>
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Target</div>
+            <select class="sdpi-item-value select" id="targetId" onchange="saveSettings()"></select>
+        </div>
+        <div class="sdpi-item" id="noDevices" style="display:none;">
+            <div class="sdpi-item-value">No devices found.</div>
+        </div>
+        <div class="sdpi-item">
+            <button class="sdpi-item-value" type="button" onclick="refreshCatalog()">Refresh Devices</button>
+        </div>
+
+        <div class="sdpi-heading">Level Options</div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Mode</div>
+            <select class="sdpi-item-value select" id="levelMode" onchange="saveSettings()">
+                <option value="gain">Gain (dB)</option>
+                <option value="volume">Volume</option>
+            </select>
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Step Size</div>
+            <input class="sdpi-item-value" type="number" id="stepSize" onchange="saveSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Min</div>
+            <input class="sdpi-item-value" type="number" id="minLevel" onchange="saveSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Max</div>
+            <input class="sdpi-item-value" type="number" id="maxLevel" onchange="saveSettings()">
+        </div>
+
+        <div class="sdpi-heading">Global Discovery Settings</div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Lake Host</div>
+            <input class="sdpi-item-value" type="text" id="lakeHost" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Lake Port</div>
+            <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">L-Acoustics Subnet</div>
+            <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.0.0/24" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">L-Acoustics Hosts</div>
+            <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.0.20,192.168.0.21" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">HTTP User</div>
+            <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">HTTP Pass</div>
+            <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Smaart Host</div>
+            <input class="sdpi-item-value" type="text" id="smaartHost" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Smaart Port</div>
+            <input class="sdpi-item-value" type="number" id="smaartPort" onchange="saveGlobalSettings()">
+        </div>
+    </div>
+    <script src="inspector.js"></script>
+</body>
+
+</html>
