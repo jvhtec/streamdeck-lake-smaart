@@ -1,7 +1,7 @@
 # Claude Notes
 
 ## Repository overview
-This repo contains the Stream Deck plugin for Lake LM modules and Smaart functions. The plugin runtime lives in `com.yourcompany.lake-smaart.sdPlugin/plugin/`, and Property Inspector UI files live in `com.yourcompany.lake-smaart.sdPlugin/ui/`.
+This repo contains the Stream Deck plugin for Lake LM modules and Smaart functions. The plugin runtime lives in `com.jvhtec.lake-smaart.sdPlugin/plugin/`, and Property Inspector UI files live in `com.jvhtec.lake-smaart.sdPlugin/ui/`.
 
 ## Common commands
 - Install dependencies: `npm install`
