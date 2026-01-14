@@ -46,6 +46,7 @@ Default connection targets (overridable in Stream Deck global settings):
 ## Documentation
 
 - [User manual](docs/USER_MANUAL.md)
+- [Multi-device Stream Deck+ specification](docs/streamdeck-multi-device-spec.md)
 - [Stream Deck SDK reference](docs/streamdeck-api.md)
 - [Lake Controller reference](docs/lake-controller-api.md)
 - [Smaart suite reference](docs/smaart-suite-api.md)
