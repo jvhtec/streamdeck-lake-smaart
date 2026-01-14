@@ -16,7 +16,7 @@ Lake Controller uses the DLM protocol for third-party integrations and programma
 ### Protocol Overview
 
 - **Protocol Version**: DLM v3.4 (current compatibility)
-- **Transport**: TCP/IP binary protocol
+- **Transport**: UDP/IP binary protocol
 - **Message Format**: Binary packets with headers, message ID, and padded payload
 - **Data Alignment**: Payloads must be padded to 4-byte boundaries
 
@@ -177,20 +177,20 @@ Each request should have a unique message ID to match requests with responses. M
 
 ## Connection and Communication Flow
 
-### 1. Establish TCP Connection
+### 1. Establish UDP Socket
 
-Connect to the Lake Controller device on its configured IP address and port (typically port 1100 or device-specific).
+Bind a local UDP socket (the plugin listens on port 6004 by default) and target the Lake Controller device on its configured IP address and port (typically port 1024 in this plugin implementation).
 
 ### 2. Send Command
 
 1. Format command string
 2. Pad to 4-byte boundary
 3. Encode into DLM packet with message ID
-4. Send binary packet over TCP
+4. Send binary packet over UDP
 
 ### 3. Receive Response
 
-1. Read binary packet from TCP stream
+1. Read binary packet from UDP socket
 2. Decode packet header
 3. Extract message ID and payload
 4. Match response to request using message ID
@@ -240,7 +240,7 @@ buildRecallPreset(presetNumber: number): string
 ```typescript
 const muteCommand = buildSetMute('A', true);
 const packet = encodeDlmMsg(muteCommand, 1);
-socket.write(packet);
+socket.send(packet);
 ```
 
 ## Integration Features

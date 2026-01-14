@@ -11,7 +11,7 @@ export function buildGetStatus(): object {
 export function buildSetGenerator(enable: boolean): object {
     return {
         action: 'generator',
-        parameter: enable ? 'on' : 'off' // Hypothetical, check API v4 docs
+        state: enable
     };
 }
 

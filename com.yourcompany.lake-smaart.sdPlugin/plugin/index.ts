@@ -39,7 +39,7 @@ const result = { // Config holder
 // but we can init with defaults and update later.
 const stateStore = new StateStore();
 const dlmClient = new DlmClient(result.lakeHost, result.lakePort);
-const smaartClient = new SmaartClient('127.0.0.1', 8000); // Default local
+const smaartClient = new SmaartClient('127.0.0.1', 26000); // Default local
 const scheduler = new Scheduler(dlmClient, stateStore);
 
 const router = new Router(sdClient);
@@ -55,7 +55,7 @@ sdClient.onEvents((event) => {
     if (event.event === 'didReceiveGlobalSettings') {
         const settings = event.payload.settings;
         if (settings.lakeIp) {
-            dlmClient.setTarget(settings.lakeIp, settings.lakePort || result.lakePort);
+            dlmClient.setTarget(settings.lakeIp, result.lakePort);
         }
     }
     router.route(event);
