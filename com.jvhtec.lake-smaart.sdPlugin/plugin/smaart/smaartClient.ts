@@ -11,26 +11,33 @@ export class SmaartClient {
         this.port = port;
     }
 
+    public setTarget(host: string, port: number) {
+        this.host = host;
+        this.port = port;
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+            this.isConnected = false;
+        }
+    }
+
     public connect() {
         try {
             this.ws = new WebSocket(`ws://${this.host}:${this.port}`);
 
             this.ws.on('open', () => {
-                console.log('Connected to Smaart');
                 this.isConnected = true;
-                // Handshake if needed
             });
 
             this.ws.on('close', () => {
                 this.isConnected = false;
             });
 
-            this.ws.on('error', (e) => {
-                console.error('Smaart WS Error', e);
+            this.ws.on('error', () => {
+                this.isConnected = false;
             });
-
         } catch (e) {
-            console.error('Smaart Connection Failed', e);
+            this.isConnected = false;
         }
     }
 
@@ -41,7 +48,14 @@ export class SmaartClient {
     }
 
     public setGenerator(enable: boolean) {
-        // Helper
         this.send({ action: 'generator', state: enable });
+    }
+
+    public computeDelay() {
+        this.send({ action: 'compute_delay' });
+    }
+
+    public setActiveTraceVisible(visible: boolean) {
+        this.send({ action: 'active_trace', visible });
     }
 }
