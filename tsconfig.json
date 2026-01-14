@@ -3,14 +3,14 @@
         "target": "ES2022",
         "module": "CommonJS",
         "moduleResolution": "node",
-        "outDir": "./com.yourcompany.lake-smaart.sdPlugin/dist",
-        "rootDir": "./com.yourcompany.lake-smaart.sdPlugin/plugin",
+        "outDir": "./com.jvhtec.lake-smaart.sdPlugin/dist",
+        "rootDir": "./com.jvhtec.lake-smaart.sdPlugin/plugin",
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true
     },
     "include": [
-        "com.yourcompany.lake-smaart.sdPlugin/plugin/**/*"
+        "com.jvhtec.lake-smaart.sdPlugin/plugin/**/*"
     ]
 }
