@@ -28,7 +28,7 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 Default connection targets (overridable in Stream Deck global settings):
 
 - Lake Controller host: `192.168.0.10` on port `1024`
-- Smaart API host: `127.0.0.1` on port `8000`
+- Smaart API host: `127.0.0.1` on port `26000`
 
 ## Repository layout
 
@@ -55,4 +55,3 @@ Default connection targets (overridable in Stream Deck global settings):
 1. Install dependencies: `npm install`
 2. Build the plugin: `npm run build`
 3. Copy `com.yourcompany.lake-smaart.sdPlugin` into your Stream Deck plugins folder.
-

@@ -8,7 +8,7 @@ This Stream Deck plugin provides control of Lake LM modules and Smaart functions
 
 - Stream Deck software 6.0 or newer.
 - A Lake Controller network path to the target Lake device(s).
-- Smaart installed with its API service enabled (default port 8000).
+- Smaart installed with its API service enabled (default port 26000).
 
 ## Installation
 
@@ -23,7 +23,7 @@ Open the property inspector for any action and set:
 - **Lake IP**: IP address of the Lake Controller host (default in code: `192.168.0.10`).
 - **Lake Port**: Currently fixed to `1024` in the plugin runtime; if you need a different port, update the source and rebuild.
 
-Smaart defaults to `127.0.0.1:8000` in the runtime. If Smaart is running on another machine or port, update the plugin runtime and rebuild.
+Smaart defaults to `127.0.0.1:26000` in the runtime. If Smaart is running on another machine or port, update the plugin runtime and rebuild.
 
 ## Actions
 
@@ -43,6 +43,7 @@ Smaart defaults to `127.0.0.1:8000` in the runtime. If Smaart is running on anot
 ### Lake Preset
 
 - **Press**: Recalls a preset number on the Lake device.
+- **Note**: Recalls stop the Smaart generator (if running) for safety.
 
 **Property inspector settings**
 - Type: Recall Preset
@@ -51,6 +52,7 @@ Smaart defaults to `127.0.0.1:8000` in the runtime. If Smaart is running on anot
 ### Group Mute
 
 - **Press**: Applies a mute action to a predefined group.
+- **Note**: Mute actions stop the Smaart generator (if running) for safety.
 
 **Property inspector settings**
 - Type: Group Mute
@@ -68,7 +70,7 @@ Smaart defaults to `127.0.0.1:8000` in the runtime. If Smaart is running on anot
 ## Troubleshooting
 
 - **No Lake response**: Verify the Lake Controller IP address and confirm the device is reachable on port 1024.
-- **No Smaart response**: Confirm Smaart’s API is enabled and listening on port 8000.
+- **No Smaart response**: Confirm Smaart’s API is enabled and listening on port 26000.
 - **Dial feedback shows Offline**: The plugin has not yet received module state; check network connectivity and ensure the scheduler polling is running.
 
 ## Support references
