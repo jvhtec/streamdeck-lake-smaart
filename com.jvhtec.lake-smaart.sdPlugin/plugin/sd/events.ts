@@ -118,6 +118,11 @@ export interface DidReceiveGlobalSettingsEvent {
     };
 }
 
+export interface SendToPluginEvent extends SDEvent {
+    event: 'sendToPlugin';
+    payload: any;
+}
+
 export type IncomingEvent =
     | KeyDownEvent
     | KeyUpEvent
@@ -127,4 +132,5 @@ export type IncomingEvent =
     | WillAppearEvent
     | WillDisappearEvent
     | DidReceiveSettingsEvent
-    | DidReceiveGlobalSettingsEvent;
+    | DidReceiveGlobalSettingsEvent
+    | SendToPluginEvent;
