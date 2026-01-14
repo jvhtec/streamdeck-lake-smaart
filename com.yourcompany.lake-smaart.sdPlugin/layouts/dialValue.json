@@ -1,0 +1,46 @@
+{
+    "id": "com.yourcompany.lake-smaart.layout.dialValue",
+    "items": [
+        {
+            "key": "title",
+            "type": "text",
+            "rect": [
+                10,
+                10,
+                180,
+                30
+            ],
+            "alignment": "center",
+            "font": {
+                "size": 24,
+                "weight": 600
+            }
+        },
+        {
+            "key": "value",
+            "type": "text",
+            "rect": [
+                10,
+                45,
+                180,
+                40
+            ],
+            "alignment": "center",
+            "font": {
+                "size": 32,
+                "weight": 700,
+                "color": "#ffffff"
+            }
+        },
+        {
+            "key": "indicator",
+            "type": "pixmap",
+            "rect": [
+                0,
+                90,
+                200,
+                10
+            ]
+        }
+    ]
+}

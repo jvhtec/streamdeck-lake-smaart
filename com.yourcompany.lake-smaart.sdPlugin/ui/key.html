@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Key Property Inspector</title>
+    <link rel="stylesheet" href="sdpi.css">
+</head>
+
+<body>
+    <div class="sdpi-wrapper">
+        <!-- Lake Specific Sections -->
+        <div id="lakeControls">
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Type</div>
+                <select class="sdpi-item-value select" id="actionType" onchange="updateUI()">
+                    <option value="PRESET">Recall Preset</option>
+                    <option value="GROUP_MUTE">Group Mute</option>
+                </select>
+            </div>
+
+            <!-- Preset Settings -->
+            <div id="presetSettings">
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Preset #</div>
+                    <input class="sdpi-item-value" type="number" id="presetNumber" onchange="saveSettings()">
+                </div>
+            </div>
+
+            <!-- Group Mute Settings -->
+            <div id="groupSettings" style="display:none;">
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Group</div>
+                    <select class="sdpi-item-value select" id="groupName" onchange="saveSettings()">
+                        <option value="ALL">ALL</option>
+                        <option value="LR">LR</option>
+                    </select>
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Mode</div>
+                    <select class="sdpi-item-value select" id="muteMode" onchange="saveSettings()">
+                        <option value="TOGGLE">Toggle</option>
+                        <option value="MUTE">Mute (Panic)</option>
+                        <option value="UNMUTE">Unmute (Recover)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Smaart Info -->
+        <div id="smaartControls" style="display:none;">
+            <div class="sdpi-item-message">
+                This action communicates with Smaart. Ensure Smaart API is running.
+            </div>
+        </div>
+
+        <!-- Global Settings Section -->
+        <div class="sdpi-heading">Global Settings</div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Lake IP</div>
+            <input class="sdpi-item-value" type="text" id="lakeIp" onchange="saveGlobalSettings()">
+        </div>
+    </div>
+    <script src="inspector.js"></script>
+</body>
+
+</html>

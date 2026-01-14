@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Dial Property Inspector</title>
+    <link rel="stylesheet" href="sdpi.css">
+</head>
+<body>
+    <div class="sdpi-wrapper">
+        <!-- Module Selection -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Module</div>
+            <select class="sdpi-item-value select" id="moduleSelect" onchange="saveSettings()">
+                <option value="A">Module A</option>
+                <option value="B">Module B</option>
+                <option value="C">Module C</option>
+                <option value="D">Module D</option>
+            </select>
+        </div>
+        
+        <!-- Press Action -->
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Press Action</div>
+            <select class="sdpi-item-value select" id="pressAction" onchange="saveSettings()">
+                <option value="mute">Toggle Mute</option>
+                <option value="reset">Reset Gain (0dB)</option>
+            </select>
+        </div>
+
+         <!-- Group Modifier -->
+         <div class="sdpi-item">
+            <div class="sdpi-item-label">Modifier (Press+Rot)</div>
+             <select class="sdpi-item-value select" id="groupTarget" onchange="saveSettings()">
+                <option value="">None</option>
+                <option value="LR">L-R Group</option>
+                <option value="ALL">ALL Group</option>
+            </select>
+        </div>
+    </div>
+    <script src="inspector.js"></script>
+</body>
+</html>

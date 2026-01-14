@@ -1,0 +1,17 @@
+{
+  "name": "com.yourcompany.lake-smaart",
+  "version": "1.0.0",
+  "description": "Stream Deck plugin for Lake LM and Smaart",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.5.0"
+  }
+}

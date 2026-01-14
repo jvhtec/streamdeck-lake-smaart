@@ -1,0 +1,114 @@
+{
+    "Actions": [
+        {
+            "Icon": "images/icon_dial",
+            "Name": "Lake Module Control",
+            "UUID": "com.yourcompany.lake-smaart.dial",
+            "PropertyInspectorPath": "ui/dial.html",
+            "Controllers": [
+                "Knob"
+            ],
+            "Encoder": {
+                "layout": "layouts/dialValue.json"
+            },
+            "States": [
+                {
+                    "Image": "images/icon_dial",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_preset",
+            "Name": "Lake Preset",
+            "UUID": "com.yourcompany.lake-smaart.preset",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_preset",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_mute",
+            "Name": "Group Mute",
+            "UUID": "com.yourcompany.lake-smaart.groupmute",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_mute",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_smaart_gen",
+            "Name": "Smaart Generator",
+            "UUID": "com.yourcompany.lake-smaart.smaartgen",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_smaart_gen_off",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                },
+                {
+                    "Image": "images/icon_smaart_gen_on",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_smaart_capture",
+            "Name": "Smaart Capture",
+            "UUID": "com.yourcompany.lake-smaart.smaartcapture",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_smaart_capture",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        }
+    ],
+    "SDKVersion": 2,
+    "Author": "Your Company",
+    "Description": "Lake LM and Smaart Control",
+    "Name": "Lake Smaart Controller",
+    "Icon": "images/pluginIcon",
+    "URL": "https://yourcompany.com",
+    "Version": "1.0.2",
+    "OS": [
+        {
+            "Platform": "mac"
+        },
+        {
+            "Platform": "windows"
+        }
+    ],
+    "Software": {
+        "MinimumVersion": "6.0"
+    },
+    "CodePath": "dist/index.js",
+    "CodePathMac": "dist/index.js",
+    "CodePathWin": "dist/index.js",
+    "Category": "Audio"
+}
