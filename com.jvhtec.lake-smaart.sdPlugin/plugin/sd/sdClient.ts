@@ -11,21 +11,37 @@ export class SDClient {
     private eventHandlers: EventHandler[] = [];
 
     constructor(port: string, uuid: string, registerEvent: string) {
-        this.port = parseInt(port);
+        this.port = parseInt(port, 10);
         this.uuid = uuid;
         this.registerEvent = registerEvent;
     }
 
     public connect() {
+        if (!Number.isFinite(this.port) || this.port <= 0) {
+            console.error('Invalid Stream Deck websocket port:', this.port);
+            return;
+        }
+
+        // Defensive: avoid leaving an old socket around if connect() is called twice.
+        if (this.ws) {
+            try {
+                this.ws.close();
+            } catch {
+                // ignore
+            }
+            this.ws = null;
+        }
+
         this.ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
 
         this.ws.on('open', () => {
             this.register();
         });
 
-        this.ws.on('message', (data: string) => {
+        this.ws.on('message', (data: WebSocket.RawData) => {
             try {
-                const json: IncomingEvent = JSON.parse(data);
+                const text = typeof data === 'string' ? data : data.toString('utf8');
+                const json: IncomingEvent = JSON.parse(text);
                 this.emit(json);
             } catch (e) {
                 console.error('Error parsing WS message', e);
@@ -156,9 +172,9 @@ export class SDClient {
             event: 'logMessage',
             context: this.uuid,
             payload: {
-                message
-            }
-        })
+                message,
+            },
+        });
     }
 
     private send(json: any) {
