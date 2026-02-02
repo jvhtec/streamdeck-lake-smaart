@@ -14,14 +14,24 @@ export class SmaartClient {
     public setTarget(host: string, port: number) {
         this.host = host;
         this.port = port;
-        if (this.ws) {
+        this.disconnect();
+    }
+
+    private disconnect() {
+        if (!this.ws) return;
+        try {
             this.ws.close();
-            this.ws = null;
-            this.isConnected = false;
+        } catch {
+            // ignore
         }
+        this.ws = null;
+        this.isConnected = false;
     }
 
     public connect() {
+        // Defensive: if connect() is called multiple times, avoid leaking sockets.
+        this.disconnect();
+
         try {
             this.ws = new WebSocket(`ws://${this.host}:${this.port}`);
 
@@ -33,17 +43,24 @@ export class SmaartClient {
                 this.isConnected = false;
             });
 
-            this.ws.on('error', () => {
+            this.ws.on('error', (err) => {
                 this.isConnected = false;
+                // Avoid throwing; connection can legitimately fail if Smaart is not running.
+                console.warn('Smaart websocket error:', err);
             });
         } catch (e) {
             this.isConnected = false;
+            console.warn('Failed to connect to Smaart websocket:', e);
         }
     }
 
     public send(command: object) {
         if (this.ws && this.isConnected) {
-            this.ws.send(JSON.stringify(command));
+            try {
+                this.ws.send(JSON.stringify(command));
+            } catch (e) {
+                console.warn('Failed to send Smaart command:', e);
+            }
         }
     }
 
