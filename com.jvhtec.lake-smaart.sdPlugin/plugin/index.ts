@@ -42,10 +42,14 @@ const log = (message: string) => {
 
 process.on('uncaughtException', (err) => {
     log(`[fatal] uncaughtException: ${err?.stack || String(err)}`);
+    // Crash so Stream Deck can restart the plugin cleanly.
+    process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
     log(`[fatal] unhandledRejection: ${String(reason)}`);
+    // Crash so Stream Deck can restart the plugin cleanly.
+    process.exit(1);
 });
 
 const defaultSettings = {
