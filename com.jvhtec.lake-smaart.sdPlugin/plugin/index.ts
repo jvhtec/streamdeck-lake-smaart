@@ -68,9 +68,10 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const defaultSettings = {
-    lakeHost: '192.168.0.10',
+    // Lake is typically link-local (APIPA) on direct connections; leave blank to auto-detect local 169.254.x.0/24.
+    lakeHost: '',
     lakePort: 1024,
-    laDiscoverySubnet: '192.168.0.0/24',
+    laDiscoverySubnet: '192.168.1.0/24',
     laDiscoveryHosts: '',
     laAuthUser: '',
     laAuthPass: '',
@@ -86,8 +87,12 @@ const defaultSettings = {
     laRequestTimeoutMs: 1200,
 };
 
-const dlmClient = new DlmClient(defaultSettings.lakeHost, defaultSettings.lakePort);
-const lakeBackend = new LakeBackend(dlmClient, { host: defaultSettings.lakeHost, port: defaultSettings.lakePort });
+const dlmClient = new DlmClient('127.0.0.1', defaultSettings.lakePort);
+const lakeBackend = new LakeBackend(dlmClient, {
+    host: defaultSettings.lakeHost || undefined,
+    port: defaultSettings.lakePort,
+    // discoverySubnet omitted => auto APIPA /24
+});
 const laHttpBackend = new LaHttpBackend({
     discoverySubnet: defaultSettings.laDiscoverySubnet,
     discoveryHosts: [],
@@ -140,8 +145,9 @@ sdClient.onEvents((event) => {
         const smaartPort = clampPort(Number(settings.smaartPort), defaultSettings.smaartPort);
 
         lakeBackend.updateSettings({
-            host: settings.lakeHost || defaultSettings.lakeHost,
+            host: (settings.lakeHost && String(settings.lakeHost).trim()) ? String(settings.lakeHost).trim() : undefined,
             port: lakePort,
+            // discoverySubnet/hosts are auto unless we add UI fields later.
         });
         laHttpBackend.updateSettings({
             discoverySubnet: settings.laDiscoverySubnet || defaultSettings.laDiscoverySubnet,

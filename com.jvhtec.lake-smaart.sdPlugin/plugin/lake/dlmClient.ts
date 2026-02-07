@@ -67,13 +67,21 @@ export class DlmClient extends EventEmitter {
         }
     }
 
-    public async send(command: string, retries = 2, timeoutMs = 250): Promise<DlmPacket | null> {
+    public async send(
+        command: string,
+        retries = 2,
+        timeoutMs = 250,
+        target?: { host: string; port?: number }
+    ): Promise<DlmPacket | null> {
         return new Promise((resolve, reject) => {
             const msgId = this.msgIdCounter++;
             const packet = encodeDlmMsg(command, msgId);
 
+            const host = target?.host || this.host;
+            const port = target?.port ?? this.port;
+
             const sendAttempt = () => {
-                this.socket.send(packet, this.port, this.host, (err) => {
+                this.socket.send(packet, port, host, (err) => {
                     if (err) {
                         // Socket send error logic
                         console.error('UDP Send error', err);
