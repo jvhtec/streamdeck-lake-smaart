@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Scene / Macro — Property Inspector</title>
+  <link rel="stylesheet" href="sdpi.css">
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+    .steps { border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 8px; }
+    .step { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin: 6px 0; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  </style>
+</head>
+
+<body>
+  <div class="sdpi-wrapper">
+
+    <div class="sdpi-heading">Scene / Macro</div>
+    <div class="sdpi-item-message">Build an ordered list of steps (preset, mute group, level, Smaart commands) and run them with one key.</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Name</div>
+      <input class="sdpi-item-value" type="text" id="sceneName" placeholder="e.g. PA MUTE + Recall 1" oninput="scSaveSettings()" />
+    </div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Double Press</div>
+      <input class="sdpi-item-value" type="checkbox" id="requireDoublePress" onchange="scSaveSettings()" />
+    </div>
+
+    <div class="sdpi-heading">Add Step</div>
+
+    <div class="sdpi-item">
+      <div class="sdpi-item-label">Type</div>
+      <select class="sdpi-item-value select" id="stepType" onchange="scRenderStepInputs()">
+        <option value="preset">Preset Recall</option>
+        <option value="mute">Mute group</option>
+        <option value="unmute">Unmute group</option>
+        <option value="toggleMute">Toggle mute group</option>
+        <option value="level_gain">Set level (gain dB)</option>
+        <option value="level_volume">Set level (volume)</option>
+        <option value="smaart_gen_on">Smaart: generator ON</option>
+        <option value="smaart_gen_off">Smaart: generator OFF</option>
+        <option value="smaart_capture">Smaart: capture</option>
+        <option value="smaart_delay">Smaart: compute delay</option>
+        <option value="smaart_trace_on">Smaart: active trace visible</option>
+        <option value="smaart_trace_off">Smaart: active trace hidden</option>
+      </select>
+    </div>
+
+    <div id="deviceTargetBlock">
+      <div class="row">
+        <div class="sdpi-item">
+          <div class="sdpi-item-label">Device</div>
+          <select class="sdpi-item-value select" id="deviceId" onchange="scOnDeviceChange()"></select>
+        </div>
+        <div class="sdpi-item">
+          <div class="sdpi-item-label">Target</div>
+          <select class="sdpi-item-value select" id="targetId"></select>
+        </div>
+      </div>
+
+      <div class="sdpi-item" id="levelValueBlock" style="display:none;">
+        <div class="sdpi-item-label">Value</div>
+        <input class="sdpi-item-value" type="number" id="levelValue" placeholder="e.g. -6.0" />
+      </div>
+
+      <div class="sdpi-item" id="groupAddBlock" style="display:none;">
+        <button class="sdpi-item-value" type="button" onclick="scAddToGroup()">Add target to group</button>
+      </div>
+
+      <div class="sdpi-item" id="groupListBlock" style="display:none;">
+        <div class="sdpi-item-label">Group</div>
+        <div class="sdpi-item-value mono" id="groupList">(empty)</div>
+      </div>
+    </div>
+
+    <div class="sdpi-item">
+      <button class="sdpi-item-value" type="button" onclick="scAddStep()">Add Step</button>
+    </div>
+
+    <div class="sdpi-heading">Steps</div>
+    <div class="steps" id="steps"></div>
+
+    <div class="sdpi-item">
+      <button class="sdpi-item-value" type="button" onclick="scTestRun()">Test Run</button>
+    </div>
+
+    <div class="sdpi-item-message mono" id="status"></div>
+
+    <details>
+      <summary class="sdpi-heading">Global Settings (shared)</summary>
+
+      <div class="sdpi-item-message">These settings are shared across all actions.</div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Lake Host</div>
+        <input class="sdpi-item-value" type="text" id="lakeHost" onchange="scSaveGlobalSettings()">
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Lake Port</div>
+        <input class="sdpi-item-value" type="number" id="lakePort" min="1" max="65535" step="1" onchange="scSaveGlobalSettings()">
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">L-Acoustics Subnet</div>
+        <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.0.0/24" onchange="scSaveGlobalSettings()">
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">L-Acoustics Hosts</div>
+        <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.0.20,192.168.0.21" onchange="scSaveGlobalSettings()">
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">HTTP User</div>
+        <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="scSaveGlobalSettings()">
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">HTTP Pass</div>
+        <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="scSaveGlobalSettings()">
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Smaart Host</div>
+        <input class="sdpi-item-value" type="text" id="smaartHost" onchange="scSaveGlobalSettings()">
+      </div>
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Smaart Port</div>
+        <input class="sdpi-item-value" type="number" id="smaartPort" min="1" max="65535" step="1" onchange="scSaveGlobalSettings()">
+      </div>
+
+      <div class="sdpi-heading">Tuning</div>
+      <div class="sdpi-item"><div class="sdpi-item-label">Poll (ms)</div><input class="sdpi-item-value" type="number" id="devicePollIntervalMs" placeholder="500" min="100" step="50" onchange="scSaveGlobalSettings()"></div>
+      <div class="sdpi-item"><div class="sdpi-item-label">Discovery (ms)</div><input class="sdpi-item-value" type="number" id="deviceDiscoveryIntervalMs" placeholder="60000" min="0" step="500" onchange="scSaveGlobalSettings()"></div>
+      <div class="sdpi-item"><div class="sdpi-item-label">Preset poll (ms)</div><input class="sdpi-item-value" type="number" id="presetPollIntervalMs" placeholder="1500" min="100" step="50" onchange="scSaveGlobalSettings()"></div>
+      <div class="sdpi-item"><div class="sdpi-item-label">LA concurrency</div><input class="sdpi-item-value" type="number" id="laMaxConcurrency" placeholder="10" min="1" step="1" onchange="scSaveGlobalSettings()"></div>
+      <div class="sdpi-item"><div class="sdpi-item-label">LA timeout (ms)</div><input class="sdpi-item-value" type="number" id="laRequestTimeoutMs" placeholder="1200" min="100" step="50" onchange="scSaveGlobalSettings()"></div>
+
+    </details>
+
+  </div>
+
+  <script src="scene.js"></script>
+</body>
+
+</html>

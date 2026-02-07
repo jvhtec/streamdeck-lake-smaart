@@ -36,6 +36,22 @@
             ]
         },
         {
+            "Icon": "images/icon_preset",
+            "Name": "Scene / Macro",
+            "UUID": "com.jvhtec.lake-smaart.scene",
+            "PropertyInspectorPath": "ui/scene.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_preset",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
             "Icon": "images/icon_mute",
             "Name": "Mute",
             "UUID": "com.jvhtec.lake-smaart.mute",

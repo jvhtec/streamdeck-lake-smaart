@@ -13,7 +13,7 @@ This Stream Deck+ plugin provides control of Lake LM modules, L-Acoustics P1/LC1
 
 ## Installation
 
-1. Build the plugin (`npm run build`) or obtain the built plugin bundle.
+1. Build the plugin (`npm run check`) or obtain the built plugin bundle.
 2. Copy the folder `com.jvhtec.lake-smaart.sdPlugin` into your Stream Deck plugins directory.
 3. Restart Stream Deck so the plugin loads.
 
@@ -29,6 +29,19 @@ Open the property inspector for any action and set:
 - **Smaart Host / Port**: API endpoint for Smaart (default `127.0.0.1:26000`).
 
 Use the **Refresh Devices** button after changing discovery settings.
+
+### Tuning
+
+These are also global settings, and apply across actions:
+- **Poll interval (ms)**: defaults to `500` (polling only runs when actions are bound)
+- **Discovery interval (ms)**: defaults to `60000` (set to `0` to disable discovery)
+- **Preset poll interval (ms)**: defaults to `1500`
+- **L-Acoustics max concurrency**: defaults to `10`
+- **L-Acoustics request timeout (ms)**: defaults to `1200`
+
+### Security note (L-Acoustics HTTP credentials)
+
+If you set **HTTP User / Pass**, Stream Deck stores plugin global settings unencrypted on disk (this is standard for Stream Deck plugins). Treat these credentials accordingly.
 
 ## Actions
 
@@ -57,6 +70,21 @@ Use the **Refresh Devices** button after changing discovery settings.
 - Target: Module/group (Lake) or output (L-Acoustics).
 - Momentary: Enable to mute while the key is held.
 
+### Mute Group (Button)
+
+- **Press**: Controls multiple targets as a single group.
+- Modes:
+  - **Toggle** (default): if any target is unmuted, mute all; otherwise unmute all.
+  - **Mute**: mute all targets.
+  - **Unmute**: unmute all targets.
+- **Momentary**: optional press-and-hold mute behavior for the whole group.
+
+**Property inspector settings**
+
+- Device: choose a device, then select targets from that device.
+- Selected targets: choose multiple mute-capable targets.
+- Mode / Momentary.
+
 ### Preset Recall (Button)
 
 - **Press**: Recalls a preset/configuration.
@@ -67,6 +95,21 @@ Use the **Refresh Devices** button after changing discovery settings.
 - Device: Auto-detected Lake or L-Acoustics device.
 - Target: Preset slot (used slots are listed for L-Acoustics).
 - Double Press: Require a second press within ~1.2s.
+
+### Scene / Macro (Button)
+
+A programmable action that runs an ordered list of steps with one key press.
+
+Supported step types:
+- Preset recall
+- Mute group: mute / unmute / toggleMute
+- Set level: gain (dB) or volume
+- Smaart: generator on/off, capture, compute delay, active trace visible/hidden
+
+Tips:
+- Keep scenes short and predictable.
+- Use **Double Press** for any scene that changes levels/presets.
+- Use **Test Run** in the inspector to execute the steps without pressing the key.
 
 ### Smaart Generator (Button)
 
