@@ -83,7 +83,7 @@ function mmSaveSettings() {
     targetIds,
   };
 
-  settingsCache = payload;
+  settingsCache = { ...settingsCache, ...payload };
 
   websocket.send(JSON.stringify({
     event: 'setSettings',

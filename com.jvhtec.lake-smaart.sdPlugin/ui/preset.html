@@ -43,7 +43,7 @@
       </div>
       <div class="sdpi-item">
         <div class="sdpi-item-label">Lake Port</div>
-        <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
+        <input class="sdpi-item-value" type="number" id="lakePort" min="1" max="65535" step="1" onchange="saveGlobalSettings()">
       </div>
 
       <div class="sdpi-item">
@@ -66,23 +66,23 @@
       <div class="sdpi-heading">Tuning</div>
       <div class="sdpi-item">
         <div class="sdpi-item-label">Poll (ms)</div>
-        <input class="sdpi-item-value" type="number" id="devicePollIntervalMs" placeholder="500" onchange="saveGlobalSettings()">
+        <input class="sdpi-item-value" type="number" id="devicePollIntervalMs" placeholder="500" min="100" step="50" onchange="saveGlobalSettings()">
       </div>
       <div class="sdpi-item">
         <div class="sdpi-item-label">Discovery (ms)</div>
-        <input class="sdpi-item-value" type="number" id="deviceDiscoveryIntervalMs" placeholder="60000" onchange="saveGlobalSettings()">
+        <input class="sdpi-item-value" type="number" id="deviceDiscoveryIntervalMs" placeholder="60000" min="1000" step="500" onchange="saveGlobalSettings()">
       </div>
       <div class="sdpi-item">
         <div class="sdpi-item-label">Preset poll (ms)</div>
-        <input class="sdpi-item-value" type="number" id="presetPollIntervalMs" placeholder="1500" onchange="saveGlobalSettings()">
+        <input class="sdpi-item-value" type="number" id="presetPollIntervalMs" placeholder="1500" min="100" step="50" onchange="saveGlobalSettings()">
       </div>
       <div class="sdpi-item">
         <div class="sdpi-item-label">LA concurrency</div>
-        <input class="sdpi-item-value" type="number" id="laMaxConcurrency" placeholder="10" onchange="saveGlobalSettings()">
+        <input class="sdpi-item-value" type="number" id="laMaxConcurrency" placeholder="10" min="1" step="1" onchange="saveGlobalSettings()">
       </div>
       <div class="sdpi-item">
         <div class="sdpi-item-label">LA timeout (ms)</div>
-        <input class="sdpi-item-value" type="number" id="laRequestTimeoutMs" placeholder="1200" onchange="saveGlobalSettings()">
+        <input class="sdpi-item-value" type="number" id="laRequestTimeoutMs" placeholder="1200" min="100" step="50" onchange="saveGlobalSettings()">
       </div>
 
     </details>

@@ -45,7 +45,14 @@ export class DeviceManager extends EventEmitter {
     }
 
     public updateConfig(patch: Partial<DeviceManagerConfig>) {
-        this.config = { ...this.config, ...patch };
+        const next: DeviceManagerConfig = { ...this.config, ...patch };
+
+        // Sanitize
+        next.pollIntervalMs = Math.max(100, Math.floor(next.pollIntervalMs));
+        next.presetPollIntervalMs = Math.max(100, Math.floor(next.presetPollIntervalMs));
+        next.discoveryIntervalMs = Math.max(0, Math.floor(next.discoveryIntervalMs)); // allow 0 to disable
+
+        this.config = next;
         if (!this.started) return;
 
         // Restart timers to apply new intervals.

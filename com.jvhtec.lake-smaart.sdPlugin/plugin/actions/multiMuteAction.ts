@@ -28,7 +28,6 @@ export class MultiMuteAction implements Action {
                 if (groupMute !== undefined) {
                     this.sdClient.setState(context, groupMute ? 1 : 0);
                 }
-                break;
             }
         });
     }
@@ -57,7 +56,18 @@ export class MultiMuteAction implements Action {
     onDidReceiveSettings(event: IncomingEvent): void {
         if (event.event !== 'didReceiveSettings') return;
         const targetIds = uniq(event.payload.settings.targetIds || []);
-        if (targetIds.length === 0) return;
+
+        const prev = this.contextTargets.get(event.context) || [];
+        if (prev.length > 0 && (targetIds.length === 0 || prev.join('|') !== targetIds.join('|'))) {
+            // Unregister previous bindings when settings change.
+            this.deviceManager.unregisterBinding(event.context);
+            this.contextTargets.delete(event.context);
+        }
+
+        if (targetIds.length === 0) {
+            return;
+        }
+
         this.deviceManager.registerBindings(event.context, targetIds, 'mute');
         this.contextTargets.set(event.context, targetIds);
     }
@@ -90,7 +100,12 @@ export class MultiMuteAction implements Action {
             }
         }
 
-        await Promise.all(targetIds.map((id) => this.deviceManager.setMute(id, next)));
+        const results = await Promise.allSettled(targetIds.map((id) => this.deviceManager.setMute(id, next)));
+        const failed = results.filter((r) => r.status === 'rejected');
+        if (failed.length > 0) {
+            console.warn(`MultiMuteAction: ${failed.length}/${results.length} setMute operations failed`);
+        }
+
         this.lastState.set(e.context, next);
         this.sdClient.setState(e.context, next ? 1 : 0);
     }
@@ -104,7 +119,12 @@ export class MultiMuteAction implements Action {
         const targetIds = uniq(e.payload.settings.targetIds || []);
         if (targetIds.length === 0) return;
 
-        await Promise.all(targetIds.map((id) => this.deviceManager.setMute(id, false)));
+        const results = await Promise.allSettled(targetIds.map((id) => this.deviceManager.setMute(id, false)));
+        const failed = results.filter((r) => r.status === 'rejected');
+        if (failed.length > 0) {
+            console.warn(`MultiMuteAction: ${failed.length}/${results.length} momentary-unmute operations failed`);
+        }
+
         this.lastState.set(e.context, false);
         this.sdClient.setState(e.context, 0);
     }
