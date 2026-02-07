@@ -22,6 +22,17 @@ export class SmaartClient {
     }
 
     public connect() {
+        // Idempotent-ish connect: close any existing socket first.
+        if (this.ws) {
+            try {
+                this.ws.close();
+            } catch {
+                // ignore
+            }
+            this.ws = null;
+            this.isConnected = false;
+        }
+
         try {
             this.ws = new WebSocket(`ws://${this.host}:${this.port}`);
 
@@ -36,7 +47,7 @@ export class SmaartClient {
             this.ws.on('error', () => {
                 this.isConnected = false;
             });
-        } catch (e) {
+        } catch {
             this.isConnected = false;
         }
     }

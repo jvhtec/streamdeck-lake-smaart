@@ -98,6 +98,8 @@ router.registerAction('com.jvhtec.lake-smaart.smaartcapture', new KeySmaartCaptu
 router.registerAction('com.jvhtec.lake-smaart.smaartdelay', new KeySmaartComputeDelayAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaarttrace', new KeySmaartTraceToggleAction(sdClient, smaartClient));
 
+let started = false;
+
 sdClient.onEvents((event) => {
     if (event.event === 'didReceiveGlobalSettings') {
         const settings = event.payload.settings;
@@ -119,6 +121,13 @@ sdClient.onEvents((event) => {
             Number(settings.smaartPort) || defaultSettings.smaartPort
         );
         smaartClient.connect();
+
+        // Start background discovery/polling only after we've received settings.
+        if (!started) {
+            started = true;
+            deviceManager.start();
+        }
+
         deviceManager.refreshCatalog().catch((err) => log(`[deviceManager] Failed to refresh catalog: ${String(err)}`));
     }
     if (event.event === 'sendToPlugin') {
@@ -141,5 +150,5 @@ sdClient.onEvents((event) => {
 });
 
 sdClient.connect();
-deviceManager.start();
-smaartClient.connect();
+// deviceManager starts after didReceiveGlobalSettings to avoid scanning defaults.
+// smaartClient connects after didReceiveGlobalSettings to avoid duplicate sockets.
