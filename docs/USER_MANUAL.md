@@ -21,7 +21,9 @@ This Stream Deck+ plugin provides control of Lake LM modules, L-Acoustics P1/LC1
 
 Open the property inspector for any action and set:
 
-- **Lake Host**: IP address of the Lake device/Controller. If left blank, the plugin will try to auto-detect on the local **APIPA** subnet (`169.254.x.0/24`).
+- **Lake Host**: IP address of the Lake device/Controller. If left blank, the plugin will try to auto-detect by scanning:
+  - local **APIPA** (`169.254.x.0/24`) if present, otherwise
+  - the most likely non-LA private /24 from local NICs (it skips `192.168.1.0/24` by default).
 - **Lake Port**: UDP port for Lake Control (default `1024`).
 - **L-Acoustics Subnet**: Subnet to scan for devices (default `192.168.1.0/24`).
 - **L-Acoustics Hosts**: Optional comma-separated list of device IPs to probe directly.

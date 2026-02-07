@@ -270,28 +270,66 @@ export class LakeBackend implements Backend {
             return this.expandSubnet(this.settings.discoverySubnet.trim());
         }
 
-        const auto = this.autoDetectApipaSubnet();
-        if (auto) {
-            return this.expandSubnet(auto);
+        const autoSubnets = this.autoDetectSubnets();
+        for (const subnet of autoSubnets) {
+            const hosts = this.expandSubnet(subnet);
+            if (hosts.length > 0) return hosts;
         }
 
         return [];
     }
 
-    private autoDetectApipaSubnet(): string | null {
+    private autoDetectSubnets(): string[] {
         const ifs = os.networkInterfaces();
+        const apipa: string[] = [];
+        const candidates: Array<{ subnet: string; score: number; address: string }> = [];
+
         for (const name of Object.keys(ifs)) {
             for (const info of ifs[name] || []) {
                 if (info.family !== 'IPv4') continue;
                 if (info.internal) continue;
                 const addr = info.address;
-                if (!addr.startsWith('169.254.')) continue;
-                const parts = addr.split('.');
-                if (parts.length !== 4) continue;
-                return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+                if (!addr || addr === '0.0.0.0' || addr.startsWith('127.')) continue;
+
+                // Prefer link-local Lake networks when present.
+                if (addr.startsWith('169.254.')) {
+                    const parts = addr.split('.');
+                    if (parts.length === 4) apipa.push(`${parts[0]}.${parts[1]}.${parts[2]}.0/24`);
+                    continue;
+                }
+
+                // Avoid scanning the dedicated L-Acoustics network by default.
+                if (addr.startsWith('192.168.1.')) continue;
+
+                const parts = addr.split('.').map((x) => parseInt(x, 10));
+                if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) continue;
+
+                const subnet = `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+
+                // Heuristic scoring: prefer private /24s most likely used for control networks.
+                let score = 0;
+                if (parts[0] === 192 && parts[1] === 168) score = 3;
+                else if (parts[0] === 10) score = 2;
+                else if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) score = 1;
+
+                if (score > 0) {
+                    candidates.push({ subnet, score, address: addr });
+                }
             }
         }
-        return null;
+
+        const uniq = (xs: string[]) => Array.from(new Set(xs));
+
+        if (apipa.length > 0) {
+            return uniq(apipa);
+        }
+
+        if (candidates.length === 0) return [];
+
+        candidates.sort((a, b) => b.score - a.score || a.address.localeCompare(b.address));
+
+        // Only scan the top candidate subnet by default to avoid scanning random office/home networks.
+        return [candidates[0].subnet];
     }
 
     private expandSubnet(subnet: string): string[] {
