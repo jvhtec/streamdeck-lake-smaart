@@ -192,7 +192,12 @@ sdClient.onEvents((event) => {
         }
 
         if (request === 'runScene') {
-            const steps = Array.isArray(event.payload?.steps) ? event.payload.steps : [];
+            // Property inspector should send steps under payload, but accept legacy top-level too.
+            const steps = Array.isArray(event.payload?.steps)
+                ? event.payload.steps
+                : Array.isArray((event as any).steps)
+                  ? (event as any).steps
+                  : [];
             sceneAction
                 .runScene(steps)
                 .then(() => {

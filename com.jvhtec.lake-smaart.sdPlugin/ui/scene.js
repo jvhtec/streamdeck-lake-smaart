@@ -337,8 +337,7 @@ function scTestRun() {
   websocket.send(JSON.stringify({
     event: 'sendToPlugin',
     context: actionInfo.context,
-    payload: { request: 'runScene' },
-    steps,
+    payload: { request: 'runScene', steps },
   }));
 }
 
