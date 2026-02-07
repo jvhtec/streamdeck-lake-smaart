@@ -34,7 +34,7 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 Default discovery settings (overridable in Stream Deck global settings):
 
 - Lake Controller host: *(optional)* — leave blank to auto-detect:
-  - local **APIPA** (`169.254.x.0/24`) if present, otherwise
+  - local **APIPA** (`169.254.x.x`) via broadcast probe (no full scan), otherwise
   - the most likely non-LA private /24 from your NICs (it skips `192.168.1.0/24` by default)
 - Lake Port: `1024`
 - L-Acoustics discovery subnet: `192.168.1.0/24`

@@ -1,7 +1,10 @@
 import os from 'node:os';
 
+import type { RemoteInfo } from 'dgram';
+
 import { Backend, DeviceDescriptor, LevelMode, TargetDescriptor, TargetState } from '../core/types';
 import { DlmClient } from '../lake/dlmClient';
+import { encodeDlmMsg, parseResponse } from '../lake/dlmPacket';
 import { buildGetGain, buildGetMute, buildRecallPreset, buildSetGain, buildSetMute } from '../lake/dlmCommands';
 import { GROUPS, ModuleId } from '../lake/lakeModel';
 
@@ -80,6 +83,18 @@ export class LakeBackend implements Backend {
                     online,
                 },
             ];
+        }
+
+        // Fast path: if we're on link-local DHCP (169.254.x.x), avoid scanning by broadcasting a probe.
+        const broadcastHosts = this.autoDetectBroadcastHosts();
+        if (broadcastHosts.length > 0) {
+            const results = await this.discoverViaBroadcast(broadcastHosts);
+            if (results.length > 0) {
+                for (const d of results) {
+                    if (d.address) this.deviceAddresses.set(d.id, d.address);
+                }
+                return results;
+            }
         }
 
         const hosts = this.buildHostList();
@@ -277,6 +292,69 @@ export class LakeBackend implements Backend {
         }
 
         return [];
+    }
+
+    private autoDetectBroadcastHosts(): string[] {
+        // If we have an APIPA NIC, try directed broadcast on link-local.
+        // This avoids scanning 65k hosts (APIPA is /16) and typically finds Lake devices instantly.
+        const ifs = os.networkInterfaces();
+        for (const name of Object.keys(ifs)) {
+            for (const info of ifs[name] || []) {
+                if (info.family !== 'IPv4') continue;
+                if (info.internal) continue;
+                const addr = info.address;
+                if (!addr) continue;
+                if (addr.startsWith('169.254.')) {
+                    return ['169.254.255.255'];
+                }
+            }
+        }
+        return [];
+    }
+
+    private async discoverViaBroadcast(broadcastHosts: string[]): Promise<DeviceDescriptor[]> {
+        const command = buildGetMute('A');
+        const msgId = Math.floor(Math.random() * 0xfffffff);
+        const encoded = encodeDlmMsg(command, msgId);
+
+        const found = new Set<string>();
+
+        const onPacket = (msg: Buffer, rinfo: RemoteInfo) => {
+            const parsed = parseResponse(msg);
+            if (!parsed) return;
+            if (parsed.msgId !== msgId) return;
+            if (!rinfo.address) return;
+            found.add(String(rinfo.address));
+        };
+
+        // Enable broadcast and listen for replies briefly.
+        this.client.setBroadcast(true);
+        this.client.on('packet', onPacket);
+
+        try {
+            for (const host of broadcastHosts) {
+                this.client.sendRaw(encoded, host, this.settings.port);
+            }
+            // wait a moment for replies
+            await new Promise<void>((r) => setTimeout(r, 250));
+        } finally {
+            this.client.off('packet', onPacket);
+            this.client.setBroadcast(false);
+        }
+
+        const results: DeviceDescriptor[] = [];
+        for (const host of found) {
+            results.push({
+                id: `lake_${host}`,
+                name: `Lake (${host})`,
+                backend: 'lake',
+                address: host,
+                online: true,
+            });
+        }
+
+        results.sort((a, b) => (a.address || '').localeCompare(b.address || ''));
+        return results;
     }
 
     private autoDetectSubnets(): string[] {

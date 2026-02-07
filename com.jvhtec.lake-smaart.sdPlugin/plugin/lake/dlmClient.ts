@@ -2,6 +2,10 @@ import dgram from 'dgram';
 import { EventEmitter } from 'events';
 import { encodeDlmMsg, decodeAck, parseResponse, DlmPacket, ACK_SUCCESS } from './dlmPacket';
 
+// Events:
+// - 'onlineStatus' (boolean)
+// - 'packet' (msg: Buffer, rinfo: dgram.RemoteInfo) — raw UDP packets for discovery.
+
 interface PendingRequest {
     msgId: number;
     resolve: (value: DlmPacket | null) => void;
@@ -29,6 +33,8 @@ export class DlmClient extends EventEmitter {
         this.socket = dgram.createSocket('udp4');
 
         this.socket.on('message', (msg, rinfo) => {
+            // For discovery tooling (broadcast probes etc.)
+            this.emit('packet', msg, rinfo);
             this.handleMessage(msg);
         });
 
@@ -45,6 +51,21 @@ export class DlmClient extends EventEmitter {
         if (port !== undefined) {
             this.port = port;
         }
+    }
+
+    public setBroadcast(enabled: boolean) {
+        try {
+            this.socket.setBroadcast(enabled);
+        } catch {
+            // ignore
+        }
+    }
+
+    public sendRaw(packet: Buffer, host: string, port?: number) {
+        const p = port ?? this.port;
+        this.socket.send(packet, p, host, (err) => {
+            if (err) console.error('UDP SendRaw error', err);
+        });
     }
 
     private bind() {
