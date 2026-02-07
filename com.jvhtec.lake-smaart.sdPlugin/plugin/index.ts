@@ -12,6 +12,7 @@ import { KeySmaartGenAction } from './actions/keySmaartGen';
 import { KeySmaartCaptureAction } from './actions/keySmaartCapture';
 import { KeySmaartComputeDelayAction } from './actions/keySmaartComputeDelay';
 import { KeySmaartTraceToggleAction } from './actions/keySmaartTraceToggle';
+import { MultiMuteAction } from './actions/multiMuteAction';
 
 const args = process.argv.slice(2);
 let port = '0';
@@ -111,6 +112,7 @@ router.registerAction('com.jvhtec.lake-smaart.smaartgen', new KeySmaartGenAction
 router.registerAction('com.jvhtec.lake-smaart.smaartcapture', new KeySmaartCaptureAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartdelay', new KeySmaartComputeDelayAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaarttrace', new KeySmaartTraceToggleAction(sdClient, smaartClient));
+router.registerAction('com.jvhtec.lake-smaart.multiMute', new MultiMuteAction(sdClient, deviceManager));
 
 let started = false;
 

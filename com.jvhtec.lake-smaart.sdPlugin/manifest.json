@@ -52,6 +52,22 @@
             ]
         },
         {
+            "Icon": "images/icon_mute",
+            "Name": "Mute Group",
+            "UUID": "com.jvhtec.lake-smaart.multiMute",
+            "PropertyInspectorPath": "ui/multiMute.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_mute",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
             "Icon": "images/icon_smaart_gen",
             "Name": "Smaart Generator",
             "UUID": "com.jvhtec.lake-smaart.smaartgen",
