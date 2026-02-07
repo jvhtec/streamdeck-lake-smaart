@@ -12,7 +12,9 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 | --- | --- |
 | Level + Press-to-Mute (Dial) | ![Dial icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_dial.png) |
 | Preset Recall | ![Preset icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_preset.png) |
+| Scene / Macro | ![Preset icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_preset.png) |
 | Mute | ![Mute icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_mute.png) |
+| Mute Group | ![Mute icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_mute.png) |
 | Smaart Generator | ![Smaart generator icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_gen.png) |
 | Smaart Capture | ![Smaart capture icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
 | Smaart Compute Delay | ![Smaart compute delay icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
@@ -23,6 +25,7 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 - Control Lake LM module/group gain and mute with Stream Deck+ encoders.
 - Toggle mute on Lake LM modules/groups and L-Acoustics outputs.
 - **Mute Group** action: bind multiple mute-capable targets and toggle/mute/unmute them together.
+- **Scene / Macro** action: run an ordered list of steps (preset recall, multi-mute, set level, Smaart commands) with one key.
 - Recall Lake and L-Acoustics presets/configurations from keys.
 - Trigger Smaart generator, capture, delay calculation, and active trace visibility actions.
 

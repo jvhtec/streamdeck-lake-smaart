@@ -13,6 +13,7 @@ import { KeySmaartCaptureAction } from './actions/keySmaartCapture';
 import { KeySmaartComputeDelayAction } from './actions/keySmaartComputeDelay';
 import { KeySmaartTraceToggleAction } from './actions/keySmaartTraceToggle';
 import { MultiMuteAction } from './actions/multiMuteAction';
+import { SceneAction } from './actions/sceneAction';
 
 const args = process.argv.slice(2);
 let port = '0';
@@ -125,7 +126,10 @@ router.registerAction('com.jvhtec.lake-smaart.smaartgen', new KeySmaartGenAction
 router.registerAction('com.jvhtec.lake-smaart.smaartcapture', new KeySmaartCaptureAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartdelay', new KeySmaartComputeDelayAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaarttrace', new KeySmaartTraceToggleAction(sdClient, smaartClient));
+const sceneAction = new SceneAction(sdClient, deviceManager, smaartClient);
+
 router.registerAction('com.jvhtec.lake-smaart.multiMute', new MultiMuteAction(sdClient, deviceManager));
+router.registerAction('com.jvhtec.lake-smaart.scene', sceneAction);
 
 let started = false;
 
@@ -184,6 +188,18 @@ sdClient.onEvents((event) => {
                 })
                 .catch((err) => {
                     log(`[deviceManager] Failed to refresh catalog: ${String(err)}`);
+                });
+        }
+
+        if (request === 'runScene') {
+            const steps = Array.isArray(event.payload?.steps) ? event.payload.steps : [];
+            sceneAction
+                .runScene(steps)
+                .then(() => {
+                    sdClient.sendToPropertyInspector(event.context, { ok: true });
+                })
+                .catch((err) => {
+                    sdClient.sendToPropertyInspector(event.context, { ok: false, error: String(err) });
                 });
         }
     }
