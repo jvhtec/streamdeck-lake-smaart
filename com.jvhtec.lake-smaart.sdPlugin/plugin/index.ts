@@ -32,6 +32,26 @@ for (let i = 0; i < args.length; i++) {
 }
 
 const sdClient = new SDClient(port, uuid, registerEvent);
+
+const log = (message: string) => {
+    // Stream Deck provides a "logMessage" event visible in the plugin logs.
+    // Keep console output too for local debugging.
+    console.log(message);
+    sdClient.logMessage(message);
+};
+
+process.on('uncaughtException', (err) => {
+    log(`[fatal] uncaughtException: ${err?.stack || String(err)}`);
+    // Crash so Stream Deck can restart the plugin cleanly.
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+    log(`[fatal] unhandledRejection: ${String(reason)}`);
+    // Crash so Stream Deck can restart the plugin cleanly.
+    process.exit(1);
+});
+
 const defaultSettings = {
     lakeHost: '192.168.0.10',
     lakePort: 1024,
@@ -54,6 +74,19 @@ const laHttpBackend = new LaHttpBackend({
 const smaartClient = new SmaartClient(defaultSettings.smaartHost, defaultSettings.smaartPort);
 
 const deviceManager = new DeviceManager([lakeBackend, laHttpBackend]);
+
+deviceManager.on('log', (msg) => {
+    log(`[deviceManager] ${msg}`);
+});
+
+let lastCatalogLogMs = 0;
+deviceManager.on('catalogUpdated', () => {
+    const now = Date.now();
+    // Avoid spamming Stream Deck logs during periodic discovery.
+    if (now - lastCatalogLogMs < 60_000) return;
+    lastCatalogLogMs = now;
+    log(`[deviceManager] Catalog updated: ${deviceManager.getDevices().length} device(s), ${deviceManager.getTargets().length} target(s)`);
+});
 
 const router = new Router(sdClient);
 
@@ -86,17 +119,22 @@ sdClient.onEvents((event) => {
             Number(settings.smaartPort) || defaultSettings.smaartPort
         );
         smaartClient.connect();
-        deviceManager.refreshCatalog().catch(() => undefined);
+        deviceManager.refreshCatalog().catch((err) => log(`[deviceManager] Failed to refresh catalog: ${String(err)}`));
     }
     if (event.event === 'sendToPlugin') {
         const request = event.payload?.request;
         if (request === 'catalog') {
-            deviceManager.refreshCatalog().then(() => {
-                sdClient.sendToPropertyInspector(event.context, {
-                    devices: deviceManager.getDevices(),
-                    targets: deviceManager.getTargets(),
+            deviceManager
+                .refreshCatalog()
+                .then(() => {
+                    sdClient.sendToPropertyInspector(event.context, {
+                        devices: deviceManager.getDevices(),
+                        targets: deviceManager.getTargets(),
+                    });
+                })
+                .catch((err) => {
+                    log(`[deviceManager] Failed to refresh catalog: ${String(err)}`);
                 });
-            });
         }
     }
     router.route(event);
