@@ -33,8 +33,11 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 
 Default discovery settings (overridable in Stream Deck global settings):
 
-- Lake Controller host: `192.168.0.10` on port `1024`
-- L-Acoustics discovery subnet: `192.168.0.0/24`
+- Lake Controller host: *(optional)* — leave blank to auto-detect:
+  - local **APIPA** (`169.254.x.x`) via broadcast probe (no full scan), otherwise
+  - the most likely non-LA private /24 from your NICs (it skips `192.168.1.0/24` by default)
+- Lake Port: `1024`
+- L-Acoustics discovery subnet: `192.168.1.0/24`
 - Optional explicit L-Acoustics hosts: `192.168.0.20,192.168.0.21`
 - Smaart host: `127.0.0.1` on port `26000`
 
