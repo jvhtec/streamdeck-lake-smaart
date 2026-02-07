@@ -9,8 +9,23 @@ interface ActiveBinding {
     action: ActionKind;
 }
 
+export interface DeviceManagerConfig {
+    pollIntervalMs: number;
+    discoveryIntervalMs: number;
+    presetPollIntervalMs: number;
+}
+
+const DEFAULT_CONFIG: DeviceManagerConfig = {
+    pollIntervalMs: 500,
+    discoveryIntervalMs: 60_000,
+    presetPollIntervalMs: 1500,
+};
+
 export class DeviceManager extends EventEmitter {
     private backends: Backend[];
+    private config: DeviceManagerConfig;
+    private started = false;
+
     private devices = new Map<string, DeviceDescriptor>();
     private deviceStates = new Map<string, DeviceState>();
     private targets = new Map<string, TargetDescriptor>();
@@ -21,19 +36,32 @@ export class DeviceManager extends EventEmitter {
     private refreshInFlight: Promise<void> | null = null;
     private lastPresetPoll = 0;
 
-    constructor(backends: Backend[]) {
+    constructor(backends: Backend[], config?: Partial<DeviceManagerConfig>) {
         super();
         this.backends = backends;
+        this.config = { ...DEFAULT_CONFIG, ...(config || {}) };
+    }
+
+    public updateConfig(patch: Partial<DeviceManagerConfig>) {
+        this.config = { ...this.config, ...patch };
+        if (!this.started) return;
+
+        // Restart timers to apply new intervals.
+        this.restartDiscovery();
+        this.ensurePolling();
     }
 
     public start() {
-        this.startPolling();
-        this.startDiscovery();
+        if (this.started) return;
+        this.started = true;
+        this.restartDiscovery();
+        this.ensurePolling();
     }
 
     public stop() {
-        if (this.pollTimer) clearInterval(this.pollTimer);
-        if (this.discoveryTimer) clearInterval(this.discoveryTimer);
+        this.started = false;
+        this.stopPolling();
+        this.stopDiscovery();
     }
 
     public async refreshCatalog() {
@@ -78,17 +106,44 @@ export class DeviceManager extends EventEmitter {
         this.emit('catalogUpdated');
     }
 
-    private startDiscovery() {
-        this.refreshCatalog().catch(() => undefined);
+    private restartDiscovery() {
+        this.stopDiscovery();
+        const { discoveryIntervalMs } = this.config;
+        if (discoveryIntervalMs <= 0) return;
+
+        this.refreshCatalog().catch((err) => this.emit('log', `Catalog refresh failed: ${String(err)}`));
         this.discoveryTimer = setInterval(() => {
-            this.refreshCatalog().catch(() => undefined);
-        }, 15000);
+            this.refreshCatalog().catch((err) => this.emit('log', `Catalog refresh failed: ${String(err)}`));
+        }, discoveryIntervalMs);
     }
 
-    private startPolling() {
+    private stopDiscovery() {
+        if (this.discoveryTimer) {
+            clearInterval(this.discoveryTimer);
+            this.discoveryTimer = null;
+        }
+    }
+
+    private ensurePolling() {
+        if (!this.started) return;
+
+        // Polling is only useful when we have active bindings.
+        if (this.bindings.size === 0) {
+            this.stopPolling();
+            return;
+        }
+
+        if (this.pollTimer) return;
         this.pollTimer = setInterval(() => {
             this.pollOnce().catch(() => undefined);
-        }, 300);
+        }, this.config.pollIntervalMs);
+    }
+
+    private stopPolling() {
+        if (this.pollTimer) {
+            clearInterval(this.pollTimer);
+            this.pollTimer = null;
+        }
     }
 
     private async pollOnce() {
@@ -123,7 +178,7 @@ export class DeviceManager extends EventEmitter {
         );
 
         const now = Date.now();
-        if (now - this.lastPresetPoll > 1000) {
+        if (now - this.lastPresetPoll > this.config.presetPollIntervalMs) {
             this.lastPresetPoll = now;
             await Promise.all(
                 Array.from(activePresetDevices).map(async (deviceId) => {
@@ -152,10 +207,12 @@ export class DeviceManager extends EventEmitter {
 
     public registerBinding(context: string, targetId: string, action: ActionKind) {
         this.bindings.set(context, { context, targetId, action });
+        this.ensurePolling();
     }
 
     public unregisterBinding(context: string) {
         this.bindings.delete(context);
+        this.ensurePolling();
     }
 
     public getDevices(): DeviceDescriptor[] {

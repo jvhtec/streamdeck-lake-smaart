@@ -18,12 +18,18 @@ export class LaHttpClient {
     private host: string;
     private username?: string;
     private password?: string;
+    private timeoutMs: number;
     private nonceCount = 0;
 
-    constructor(host: string, username?: string, password?: string) {
+    constructor(host: string, username?: string, password?: string, timeoutMs: number = 1200) {
         this.host = host;
         this.username = username;
         this.password = password;
+        this.timeoutMs = timeoutMs;
+    }
+
+    public setTimeoutMs(timeoutMs: number) {
+        this.timeoutMs = timeoutMs;
     }
 
     public async get<T>(path: string): Promise<HttpResponse<T>> {
@@ -64,7 +70,7 @@ export class LaHttpClient {
                 host: this.host,
                 path,
                 headers,
-                timeout: 1200,
+                timeout: this.timeoutMs,
             };
 
             const req = http.request(options, (res) => {
