@@ -79,6 +79,28 @@
             <div class="sdpi-item-label">Smaart Port</div>
             <input class="sdpi-item-value" type="number" id="smaartPort" onchange="saveGlobalSettings()">
         </div>
+
+        <div class="sdpi-heading">Tuning</div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Poll (ms)</div>
+            <input class="sdpi-item-value" type="number" id="devicePollIntervalMs" placeholder="500" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Discovery (ms)</div>
+            <input class="sdpi-item-value" type="number" id="deviceDiscoveryIntervalMs" placeholder="60000" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Preset poll (ms)</div>
+            <input class="sdpi-item-value" type="number" id="presetPollIntervalMs" placeholder="1500" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">LA concurrency</div>
+            <input class="sdpi-item-value" type="number" id="laMaxConcurrency" placeholder="10" onchange="saveGlobalSettings()">
+        </div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">LA timeout (ms)</div>
+            <input class="sdpi-item-value" type="number" id="laRequestTimeoutMs" placeholder="1200" onchange="saveGlobalSettings()">
+        </div>
     </div>
     <script src="inspector.js"></script>
 </body>

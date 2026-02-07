@@ -34,6 +34,13 @@ Default discovery settings (overridable in Stream Deck global settings):
 - Optional explicit L-Acoustics hosts: `192.168.0.20,192.168.0.21`
 - Smaart host: `127.0.0.1` on port `26000`
 
+Tuning (also in global settings):
+- Poll interval (ms): default `500` (only runs when actions are actually bound)
+- Discovery interval (ms): default `60000`
+- Preset poll interval (ms): default `1500`
+- L-Acoustics max concurrency: default `10`
+- L-Acoustics request timeout (ms): default `1200`
+
 ## Repository layout
 
 ```

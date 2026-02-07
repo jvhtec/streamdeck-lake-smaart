@@ -61,6 +61,14 @@ const defaultSettings = {
     laAuthPass: '',
     smaartHost: '127.0.0.1',
     smaartPort: 26000,
+
+    // Tuning (sane defaults; overridable via Stream Deck global settings)
+    devicePollIntervalMs: 500,
+    deviceDiscoveryIntervalMs: 60_000,
+    presetPollIntervalMs: 1500,
+
+    laMaxConcurrency: 10,
+    laRequestTimeoutMs: 1200,
 };
 
 const dlmClient = new DlmClient(defaultSettings.lakeHost, defaultSettings.lakePort);
@@ -70,10 +78,16 @@ const laHttpBackend = new LaHttpBackend({
     discoveryHosts: [],
     username: defaultSettings.laAuthUser || undefined,
     password: defaultSettings.laAuthPass || undefined,
+    maxConcurrency: defaultSettings.laMaxConcurrency,
+    requestTimeoutMs: defaultSettings.laRequestTimeoutMs,
 });
 const smaartClient = new SmaartClient(defaultSettings.smaartHost, defaultSettings.smaartPort);
 
-const deviceManager = new DeviceManager([lakeBackend, laHttpBackend]);
+const deviceManager = new DeviceManager([lakeBackend, laHttpBackend], {
+    pollIntervalMs: defaultSettings.devicePollIntervalMs,
+    discoveryIntervalMs: defaultSettings.deviceDiscoveryIntervalMs,
+    presetPollIntervalMs: defaultSettings.presetPollIntervalMs,
+});
 
 deviceManager.on('log', (msg) => {
     log(`[deviceManager] ${msg}`);
@@ -115,12 +129,21 @@ sdClient.onEvents((event) => {
                 .filter(Boolean),
             username: settings.laAuthUser || undefined,
             password: settings.laAuthPass || undefined,
+            maxConcurrency: Number(settings.laMaxConcurrency) || defaultSettings.laMaxConcurrency,
+            requestTimeoutMs: Number(settings.laRequestTimeoutMs) || defaultSettings.laRequestTimeoutMs,
         });
         smaartClient.setTarget(
             settings.smaartHost || defaultSettings.smaartHost,
             Number(settings.smaartPort) || defaultSettings.smaartPort
         );
         smaartClient.connect();
+
+        // Apply tuning settings (optional)
+        deviceManager.updateConfig({
+            pollIntervalMs: Number(settings.devicePollIntervalMs) || defaultSettings.devicePollIntervalMs,
+            discoveryIntervalMs: Number(settings.deviceDiscoveryIntervalMs) || defaultSettings.deviceDiscoveryIntervalMs,
+            presetPollIntervalMs: Number(settings.presetPollIntervalMs) || defaultSettings.presetPollIntervalMs,
+        });
 
         // Start background discovery/polling only after we've received settings.
         if (!started) {

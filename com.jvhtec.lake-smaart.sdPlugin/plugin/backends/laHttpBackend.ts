@@ -11,20 +11,34 @@ export interface LaHttpSettings {
     discoveryHosts: string[];
     username?: string;
     password?: string;
+    maxConcurrency?: number;
+    requestTimeoutMs?: number;
 }
 
 export class LaHttpBackend implements Backend {
     public readonly id = 'la_http' as const;
     private settings: LaHttpSettings;
     private maxConcurrency = 10;
+    private requestTimeoutMs = 1200;
     private limiters = new Map<string, { active: number; queue: Array<() => void> }>();
 
     constructor(settings: LaHttpSettings) {
         this.settings = settings;
+        this.applyTuning(settings);
     }
 
     public updateSettings(settings: Partial<LaHttpSettings>) {
         this.settings = { ...this.settings, ...settings };
+        this.applyTuning(settings);
+    }
+
+    private applyTuning(settings: Partial<LaHttpSettings>) {
+        if (typeof settings.maxConcurrency === 'number' && settings.maxConcurrency > 0) {
+            this.maxConcurrency = Math.max(1, Math.floor(settings.maxConcurrency));
+        }
+        if (typeof settings.requestTimeoutMs === 'number' && settings.requestTimeoutMs > 0) {
+            this.requestTimeoutMs = Math.max(100, Math.floor(settings.requestTimeoutMs));
+        }
     }
 
     public async discover(): Promise<DeviceDescriptor[]> {
@@ -37,7 +51,7 @@ export class LaHttpBackend implements Backend {
     }
 
     public async getTargets(device: DeviceDescriptor): Promise<TargetDescriptor[]> {
-        const client = new LaHttpClient(device.address || '', this.settings.username, this.settings.password);
+        const client = new LaHttpClient(device.address || '', this.settings.username, this.settings.password, this.requestTimeoutMs);
         const outputsResp = await this.withLimiter(device.id, () => client.get<any[]>('/api/control/dsp/output'));
         const outputsCount = outputsResp.data ? outputsResp.data.length : 0;
         const supports = await this.detectOutputSupport(device.id, client);
@@ -75,7 +89,7 @@ export class LaHttpBackend implements Backend {
         if (target.backend !== 'la_http') {
             throw new Error('Invalid backend');
         }
-        const client = new LaHttpClient(this.getDeviceAddress(target.deviceId), this.settings.username, this.settings.password);
+        const client = new LaHttpClient(this.getDeviceAddress(target.deviceId), this.settings.username, this.settings.password, this.requestTimeoutMs);
         if (target.kind === 'output') {
             const muteResp = await this.withLimiter(target.deviceId, () => client.get<boolean>(`/api/control/dsp/output/${target.index}/mute`));
             const gainResp = await this.withLimiter(target.deviceId, () => client.get<number>(`/api/control/dsp/output/${target.index}/gain`));
@@ -97,14 +111,14 @@ export class LaHttpBackend implements Backend {
     public async setMute(target: TargetDescriptor, mute: boolean): Promise<void> {
         if (target.backend !== 'la_http') return;
         if (target.kind !== 'output') return;
-        const client = new LaHttpClient(this.getDeviceAddress(target.deviceId), this.settings.username, this.settings.password);
+        const client = new LaHttpClient(this.getDeviceAddress(target.deviceId), this.settings.username, this.settings.password, this.requestTimeoutMs);
         await this.withLimiter(target.deviceId, () => client.post(`/api/control/dsp/output/${target.index}/mute`, mute));
     }
 
     public async setLevel(target: TargetDescriptor, value: number, mode: LevelMode): Promise<void> {
         if (target.backend !== 'la_http') return;
         if (target.kind !== 'output') return;
-        const client = new LaHttpClient(this.getDeviceAddress(target.deviceId), this.settings.username, this.settings.password);
+        const client = new LaHttpClient(this.getDeviceAddress(target.deviceId), this.settings.username, this.settings.password, this.requestTimeoutMs);
         if (mode === 'volume') {
             await this.withLimiter(target.deviceId, () => client.post(`/api/control/dsp/output/${target.index}/volume`, Math.round(value)));
         } else {
@@ -113,12 +127,12 @@ export class LaHttpBackend implements Backend {
     }
 
     public async recallPreset(device: DeviceDescriptor, index: number): Promise<void> {
-        const client = new LaHttpClient(device.address || '', this.settings.username, this.settings.password);
+        const client = new LaHttpClient(device.address || '', this.settings.username, this.settings.password, this.requestTimeoutMs);
         await this.withLimiter(device.id, () => client.post('/api/configuration/load', { index }));
     }
 
     public async getActivePresetIndex(device: DeviceDescriptor): Promise<number | null> {
-        const client = new LaHttpClient(device.address || '', this.settings.username, this.settings.password);
+        const client = new LaHttpClient(device.address || '', this.settings.username, this.settings.password, this.requestTimeoutMs);
         const resp = await this.withLimiter(device.id, () => client.get<number>('/api/configuration/active/index'));
         if (resp.status !== 200 || resp.data === null) return null;
         return Number(resp.data);
@@ -170,7 +184,7 @@ export class LaHttpBackend implements Backend {
             const host = queue.shift();
             if (!host) return;
             try {
-                const client = new LaHttpClient(host, this.settings.username, this.settings.password);
+                const client = new LaHttpClient(host, this.settings.username, this.settings.password, this.requestTimeoutMs);
                 const resp = await this.withLimiter(host, () => client.get<LaInfoResponse>('/api/info'));
                 if (resp.status === 200 && resp.data) {
                     const name = resp.data.name || host;
