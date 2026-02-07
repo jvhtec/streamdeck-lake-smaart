@@ -59,5 +59,13 @@ Default discovery settings (overridable in Stream Deck global settings):
 ## Build & install
 
 1. Install dependencies: `npm install`
-2. Build the plugin: `npm run build`
+2. Typecheck + build: `npm run check`
 3. Copy `com.jvhtec.lake-smaart.sdPlugin` into your Stream Deck plugins folder.
+
+### Useful scripts
+
+- `npm run build` — compile TypeScript to `com.jvhtec.lake-smaart.sdPlugin/dist`
+- `npm run watch` — rebuild on file changes
+- `npm run typecheck` — run TypeScript typechecking without emitting files
+- `npm run clean` — remove `dist/`
+- `npm run check` — `typecheck` + `build`

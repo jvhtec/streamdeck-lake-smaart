@@ -151,4 +151,4 @@ sdClient.onEvents((event) => {
 
 sdClient.connect();
 // deviceManager starts after didReceiveGlobalSettings to avoid scanning defaults.
-// smaartClient connects after didReceiveGlobalSettings to avoid duplicate sockets.
+// smaartClient connects after didReceiveGlobalSettings (and is idempotent).
