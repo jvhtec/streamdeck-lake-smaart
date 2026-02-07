@@ -12,13 +12,13 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 | --- | --- |
 | Level + Press-to-Mute (Dial) | ![Dial icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_dial.png) |
 | Preset Recall | ![Preset icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_preset.png) |
-| Scene / Macro | ![Preset icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_preset.png) |
+| Scene / Macro | ![Scene icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_scene.png) |
 | Mute | ![Mute icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_mute.png) |
-| Mute Group | ![Mute icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_mute.png) |
+| Mute Group | ![Mute Group icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_multimute.png) |
 | Smaart Generator | ![Smaart generator icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_gen.png) |
 | Smaart Capture | ![Smaart capture icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
-| Smaart Compute Delay | ![Smaart compute delay icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
-| Smaart Toggle Trace | ![Smaart toggle trace icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
+| Smaart Compute Delay | ![Smaart delay icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_delay.png) |
+| Smaart Toggle Trace | ![Smaart trace icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_trace_off.png) |
 
 ## Features
 

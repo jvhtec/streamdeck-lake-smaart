@@ -36,7 +36,7 @@
             ]
         },
         {
-            "Icon": "images/icon_preset",
+            "Icon": "images/icon_scene",
             "Name": "Scene / Macro",
             "UUID": "com.jvhtec.lake-smaart.scene",
             "PropertyInspectorPath": "ui/scene.html",
@@ -45,7 +45,7 @@
             ],
             "States": [
                 {
-                    "Image": "images/icon_preset",
+                    "Image": "images/icon_scene",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
@@ -68,7 +68,7 @@
             ]
         },
         {
-            "Icon": "images/icon_mute",
+            "Icon": "images/icon_multimute",
             "Name": "Mute Group",
             "UUID": "com.jvhtec.lake-smaart.multiMute",
             "PropertyInspectorPath": "ui/multiMute.html",
@@ -77,7 +77,7 @@
             ],
             "States": [
                 {
-                    "Image": "images/icon_mute",
+                    "Image": "images/icon_multimute",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
@@ -121,7 +121,7 @@
             ]
         },
         {
-            "Icon": "images/icon_smaart_capture",
+            "Icon": "images/icon_smaart_delay",
             "Name": "Smaart Compute Delay",
             "UUID": "com.jvhtec.lake-smaart.smaartdelay",
             "PropertyInspectorPath": "ui/smaart.html",
@@ -130,14 +130,14 @@
             ],
             "States": [
                 {
-                    "Image": "images/icon_smaart_capture",
+                    "Image": "images/icon_smaart_delay",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
             ]
         },
         {
-            "Icon": "images/icon_smaart_capture",
+            "Icon": "images/icon_smaart_trace_off",
             "Name": "Smaart Toggle Trace",
             "UUID": "com.jvhtec.lake-smaart.smaarttrace",
             "PropertyInspectorPath": "ui/smaart.html",
@@ -146,12 +146,12 @@
             ],
             "States": [
                 {
-                    "Image": "images/icon_smaart_capture",
+                    "Image": "images/icon_smaart_trace_off",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 },
                 {
-                    "Image": "images/icon_smaart_gen_on",
+                    "Image": "images/icon_smaart_trace_on",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }

@@ -129,6 +129,20 @@ Tips:
 
 - **Press**: Toggles visibility for the active trace in Smaart.
 
+## Action icons
+
+The plugin ships with a set of action icons that appear on Stream Deck keys and dials:
+
+- Level + Press-to-Mute (Dial): `images/icon_dial.png`
+- Preset Recall: `images/icon_preset.png`
+- Scene / Macro: `images/icon_scene.png`
+- Mute: `images/icon_mute.png`
+- Mute Group: `images/icon_multimute.png`
+- Smaart Generator: `images/icon_smaart_gen.png`
+- Smaart Capture: `images/icon_smaart_capture.png`
+- Smaart Compute Delay: `images/icon_smaart_delay.png`
+- Smaart Toggle Trace: `images/icon_smaart_trace_off.png` / `images/icon_smaart_trace_on.png`
+
 ## Troubleshooting
 
 - **No devices found**: Verify network connectivity and check discovery subnet/hosts.
