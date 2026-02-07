@@ -1,3 +1,4 @@
 node_modules/
 com.jvhtec.lake-smaart.sdPlugin/dist/
+com.yourcompany.lake-smaart.sdPlugin/dist/
 .DS_Store
