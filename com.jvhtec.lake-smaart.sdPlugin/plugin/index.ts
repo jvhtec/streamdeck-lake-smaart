@@ -12,6 +12,7 @@ import { KeySmaartGenAction } from './actions/keySmaartGen';
 import { KeySmaartCaptureAction } from './actions/keySmaartCapture';
 import { KeySmaartComputeDelayAction } from './actions/keySmaartComputeDelay';
 import { KeySmaartTraceToggleAction } from './actions/keySmaartTraceToggle';
+import { MultiMuteAction } from './actions/multiMuteAction';
 
 const args = process.argv.slice(2);
 let port = '0';
@@ -32,6 +33,19 @@ for (let i = 0; i < args.length; i++) {
 }
 
 const sdClient = new SDClient(port, uuid, registerEvent);
+
+function clampInt(value: number, min: number, max: number) {
+    const v = Math.floor(value);
+    if (Number.isNaN(v)) return min;
+    return Math.min(max, Math.max(min, v));
+}
+
+function clampPort(value: number, fallback: number) {
+    if (!Number.isFinite(value)) return fallback;
+    const v = Math.floor(value);
+    if (v < 1 || v > 65535) return fallback;
+    return v;
+}
 
 const log = (message: string) => {
     // Stream Deck provides a "logMessage" event visible in the plugin logs.
@@ -111,15 +125,19 @@ router.registerAction('com.jvhtec.lake-smaart.smaartgen', new KeySmaartGenAction
 router.registerAction('com.jvhtec.lake-smaart.smaartcapture', new KeySmaartCaptureAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartdelay', new KeySmaartComputeDelayAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaarttrace', new KeySmaartTraceToggleAction(sdClient, smaartClient));
+router.registerAction('com.jvhtec.lake-smaart.multiMute', new MultiMuteAction(sdClient, deviceManager));
 
 let started = false;
 
 sdClient.onEvents((event) => {
     if (event.event === 'didReceiveGlobalSettings') {
         const settings = event.payload.settings;
+        const lakePort = clampPort(Number(settings.lakePort), defaultSettings.lakePort);
+        const smaartPort = clampPort(Number(settings.smaartPort), defaultSettings.smaartPort);
+
         lakeBackend.updateSettings({
             host: settings.lakeHost || defaultSettings.lakeHost,
-            port: Number(settings.lakePort) || defaultSettings.lakePort,
+            port: lakePort,
         });
         laHttpBackend.updateSettings({
             discoverySubnet: settings.laDiscoverySubnet || defaultSettings.laDiscoverySubnet,
@@ -129,12 +147,12 @@ sdClient.onEvents((event) => {
                 .filter(Boolean),
             username: settings.laAuthUser || undefined,
             password: settings.laAuthPass || undefined,
-            maxConcurrency: Number(settings.laMaxConcurrency) || defaultSettings.laMaxConcurrency,
-            requestTimeoutMs: Number(settings.laRequestTimeoutMs) || defaultSettings.laRequestTimeoutMs,
+            maxConcurrency: clampInt(Number(settings.laMaxConcurrency) || defaultSettings.laMaxConcurrency, 1, 50),
+            requestTimeoutMs: clampInt(Number(settings.laRequestTimeoutMs) || defaultSettings.laRequestTimeoutMs, 100, 30_000),
         });
         smaartClient.setTarget(
             settings.smaartHost || defaultSettings.smaartHost,
-            Number(settings.smaartPort) || defaultSettings.smaartPort
+            smaartPort
         );
         smaartClient.connect();
 

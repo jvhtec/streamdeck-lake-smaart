@@ -23,7 +23,7 @@
             "Icon": "images/icon_preset",
             "Name": "Preset Recall",
             "UUID": "com.jvhtec.lake-smaart.presetRecall",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/preset.html",
             "Controllers": [
                 "Keypad"
             ],
@@ -39,7 +39,23 @@
             "Icon": "images/icon_mute",
             "Name": "Mute",
             "UUID": "com.jvhtec.lake-smaart.mute",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/mute.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_mute",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_mute",
+            "Name": "Mute Group",
+            "UUID": "com.jvhtec.lake-smaart.multiMute",
+            "PropertyInspectorPath": "ui/multiMute.html",
             "Controllers": [
                 "Keypad"
             ],
@@ -55,7 +71,7 @@
             "Icon": "images/icon_smaart_gen",
             "Name": "Smaart Generator",
             "UUID": "com.jvhtec.lake-smaart.smaartgen",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/smaart.html",
             "Controllers": [
                 "Keypad"
             ],
@@ -76,7 +92,7 @@
             "Icon": "images/icon_smaart_capture",
             "Name": "Smaart Capture",
             "UUID": "com.jvhtec.lake-smaart.smaartcapture",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/smaart.html",
             "Controllers": [
                 "Keypad"
             ],
@@ -92,7 +108,7 @@
             "Icon": "images/icon_smaart_capture",
             "Name": "Smaart Compute Delay",
             "UUID": "com.jvhtec.lake-smaart.smaartdelay",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/smaart.html",
             "Controllers": [
                 "Keypad"
             ],
@@ -108,7 +124,7 @@
             "Icon": "images/icon_smaart_capture",
             "Name": "Smaart Toggle Trace",
             "UUID": "com.jvhtec.lake-smaart.smaarttrace",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/smaart.html",
             "Controllers": [
                 "Keypad"
             ],

@@ -22,6 +22,7 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 
 - Control Lake LM module/group gain and mute with Stream Deck+ encoders.
 - Toggle mute on Lake LM modules/groups and L-Acoustics outputs.
+- **Mute Group** action: bind multiple mute-capable targets and toggle/mute/unmute them together.
 - Recall Lake and L-Acoustics presets/configurations from keys.
 - Trigger Smaart generator, capture, delay calculation, and active trace visibility actions.
 

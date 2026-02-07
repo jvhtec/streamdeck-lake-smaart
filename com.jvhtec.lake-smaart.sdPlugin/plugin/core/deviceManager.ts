@@ -9,6 +9,8 @@ interface ActiveBinding {
     action: ActionKind;
 }
 
+type ContextBindings = ActiveBinding[];
+
 export interface DeviceManagerConfig {
     pollIntervalMs: number;
     discoveryIntervalMs: number;
@@ -30,7 +32,7 @@ export class DeviceManager extends EventEmitter {
     private deviceStates = new Map<string, DeviceState>();
     private targets = new Map<string, TargetDescriptor>();
     private targetStates = new Map<string, TargetState>();
-    private bindings = new Map<string, ActiveBinding>();
+    private bindings = new Map<string, ContextBindings>();
     private pollTimer: NodeJS.Timeout | null = null;
     private discoveryTimer: NodeJS.Timeout | null = null;
     private refreshInFlight: Promise<void> | null = null;
@@ -43,7 +45,14 @@ export class DeviceManager extends EventEmitter {
     }
 
     public updateConfig(patch: Partial<DeviceManagerConfig>) {
-        this.config = { ...this.config, ...patch };
+        const next: DeviceManagerConfig = { ...this.config, ...patch };
+
+        // Sanitize
+        next.pollIntervalMs = Math.max(100, Math.floor(next.pollIntervalMs));
+        next.presetPollIntervalMs = Math.max(100, Math.floor(next.presetPollIntervalMs));
+        next.discoveryIntervalMs = Math.max(0, Math.floor(next.discoveryIntervalMs)); // allow 0 to disable
+
+        this.config = next;
         if (!this.started) return;
 
         // Restart timers to apply new intervals.
@@ -149,12 +158,14 @@ export class DeviceManager extends EventEmitter {
     private async pollOnce() {
         const activeTargetIds = new Set<string>();
         const activePresetDevices = new Set<string>();
-        for (const binding of this.bindings.values()) {
-            activeTargetIds.add(binding.targetId);
-            if (binding.action === 'preset') {
-                const target = this.targets.get(binding.targetId);
-                if (target) {
-                    activePresetDevices.add(target.deviceId);
+        for (const bindings of this.bindings.values()) {
+            for (const binding of bindings) {
+                activeTargetIds.add(binding.targetId);
+                if (binding.action === 'preset') {
+                    const target = this.targets.get(binding.targetId);
+                    if (target) {
+                        activePresetDevices.add(target.deviceId);
+                    }
                 }
             }
         }
@@ -206,7 +217,17 @@ export class DeviceManager extends EventEmitter {
     }
 
     public registerBinding(context: string, targetId: string, action: ActionKind) {
-        this.bindings.set(context, { context, targetId, action });
+        this.registerBindings(context, [targetId], action);
+    }
+
+    public registerBindings(context: string, targetIds: string[], action: ActionKind) {
+        const cleaned = targetIds.map((t) => String(t || '').trim()).filter(Boolean);
+        if (cleaned.length === 0) return;
+
+        this.bindings.set(
+            context,
+            cleaned.map((targetId) => ({ context, targetId, action }))
+        );
         this.ensurePolling();
     }
 
