@@ -4,9 +4,22 @@ let actionInfo = null;
 let settingsCache = {};
 let catalog = { devices: [], targets: [] };
 
+function safeParseJson(value, fallback = {}) {
+  if (typeof value !== 'string' || value.length === 0) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.warn('Failed to parse Stream Deck payload. Check plugin path/url encoding.', error);
+    return fallback;
+  }
+}
+
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
   uuid = inPropertyInspectorUUID;
-  actionInfo = JSON.parse(inActionInfo);
+  actionInfo = safeParseJson(inActionInfo, {});
 
   websocket = new WebSocket('ws://127.0.0.1:' + inPort);
 
@@ -14,7 +27,7 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
     websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
 
     websocket.send(JSON.stringify({ event: 'getGlobalSettings', context: uuid }));
-    websocket.send(JSON.stringify({ event: 'getSettings', context: actionInfo.context }));
+    websocket.send(JSON.stringify({ event: 'getSettings', context: actionInfo.context || uuid }));
 
     mmRequestCatalog();
   };
@@ -87,7 +100,7 @@ function mmSaveSettings() {
 
   websocket.send(JSON.stringify({
     event: 'setSettings',
-    context: actionInfo.context,
+    context: actionInfo.context || uuid,
     payload,
   }));
 
@@ -123,7 +136,7 @@ function mmRequestCatalog() {
   if (!websocket) return;
   websocket.send(JSON.stringify({
     event: 'sendToPlugin',
-    context: actionInfo.context,
+    context: actionInfo.context || uuid,
     payload: { request: 'catalog' }
   }));
 }
