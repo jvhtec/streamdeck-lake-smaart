@@ -2,6 +2,18 @@
 <html>
 
 <head>
+    <script>
+        (function fixUnescapedHashInProfilePath() {
+            const { origin, pathname, hash } = window.location;
+            if (!hash || hash.length < 2) return;
+
+            const fragment = hash.slice(1);
+            if (!fragment.includes('.sdPlugin/ui/')) return;
+
+            const correctedUrl = `${origin}${pathname}%23${fragment}`;
+            window.location.replace(correctedUrl);
+        })();
+    </script>
   <meta charset="utf-8" />
   <title>Preset Recall — Property Inspector</title>
   <link rel="stylesheet" href="sdpi.css">
