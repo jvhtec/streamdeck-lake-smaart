@@ -47,6 +47,11 @@ Default discovery settings (overridable in Stream Deck global settings):
 └── package.json          # Build scripts
 ```
 
+
+## Property inspector compatibility
+
+- Action inspector pages (`ui/key.html` and `ui/dial.html`) are intentionally self-contained (inline script and styles) to avoid load failures on systems where the Stream Deck plugin install path includes special characters such as `#` (for example, user profiles like `FoH #1`).
+
 ## Documentation
 
 - [User manual](docs/USER_MANUAL.md)
