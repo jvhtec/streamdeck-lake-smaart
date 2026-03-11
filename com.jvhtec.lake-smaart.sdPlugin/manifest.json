@@ -23,7 +23,7 @@
             "Icon": "images/icon_preset",
             "Name": "Preset Recall",
             "UUID": "com.jvhtec.lake-smaart.presetRecall",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/preset.html",
             "Controllers": [
                 "Keypad"
             ],
@@ -36,10 +36,26 @@
             ]
         },
         {
+            "Icon": "images/icon_scene",
+            "Name": "Scene / Macro",
+            "UUID": "com.jvhtec.lake-smaart.scene",
+            "PropertyInspectorPath": "ui/scene.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_scene",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
             "Icon": "images/icon_mute",
             "Name": "Mute",
             "UUID": "com.jvhtec.lake-smaart.mute",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/mute.html",
             "Controllers": [
                 "Keypad"
             ],
@@ -52,10 +68,26 @@
             ]
         },
         {
+            "Icon": "images/icon_multimute",
+            "Name": "Mute Group",
+            "UUID": "com.jvhtec.lake-smaart.multiMute",
+            "PropertyInspectorPath": "ui/multiMute.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_multimute",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
             "Icon": "images/icon_smaart_gen",
             "Name": "Smaart Generator",
             "UUID": "com.jvhtec.lake-smaart.smaartgen",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/smaart.html",
             "Controllers": [
                 "Keypad"
             ],
@@ -76,7 +108,7 @@
             "Icon": "images/icon_smaart_capture",
             "Name": "Smaart Capture",
             "UUID": "com.jvhtec.lake-smaart.smaartcapture",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/smaart.html",
             "Controllers": [
                 "Keypad"
             ],
@@ -89,37 +121,37 @@
             ]
         },
         {
-            "Icon": "images/icon_smaart_capture",
+            "Icon": "images/icon_smaart_delay",
             "Name": "Smaart Compute Delay",
             "UUID": "com.jvhtec.lake-smaart.smaartdelay",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/smaart.html",
             "Controllers": [
                 "Keypad"
             ],
             "States": [
                 {
-                    "Image": "images/icon_smaart_capture",
+                    "Image": "images/icon_smaart_delay",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
             ]
         },
         {
-            "Icon": "images/icon_smaart_capture",
+            "Icon": "images/icon_smaart_trace_off",
             "Name": "Smaart Toggle Trace",
             "UUID": "com.jvhtec.lake-smaart.smaarttrace",
-            "PropertyInspectorPath": "ui/key.html",
+            "PropertyInspectorPath": "ui/smaart.html",
             "Controllers": [
                 "Keypad"
             ],
             "States": [
                 {
-                    "Image": "images/icon_smaart_capture",
+                    "Image": "images/icon_smaart_trace_off",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 },
                 {
-                    "Image": "images/icon_smaart_gen_on",
+                    "Image": "images/icon_smaart_trace_on",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }

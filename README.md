@@ -12,16 +12,20 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 | --- | --- |
 | Level + Press-to-Mute (Dial) | ![Dial icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_dial.png) |
 | Preset Recall | ![Preset icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_preset.png) |
+| Scene / Macro | ![Scene icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_scene.png) |
 | Mute | ![Mute icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_mute.png) |
+| Mute Group | ![Mute Group icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_multimute.png) |
 | Smaart Generator | ![Smaart generator icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_gen.png) |
 | Smaart Capture | ![Smaart capture icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
-| Smaart Compute Delay | ![Smaart compute delay icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
-| Smaart Toggle Trace | ![Smaart toggle trace icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
+| Smaart Compute Delay | ![Smaart delay icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_delay.png) |
+| Smaart Toggle Trace | ![Smaart trace icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_trace_off.png) |
 
 ## Features
 
 - Control Lake LM module/group gain and mute with Stream Deck+ encoders.
 - Toggle mute on Lake LM modules/groups and L-Acoustics outputs.
+- **Mute Group** action: bind multiple mute-capable targets and toggle/mute/unmute them together.
+- **Scene / Macro** action: run an ordered list of steps (preset recall, multi-mute, set level, Smaart commands) with one key.
 - Recall Lake and L-Acoustics presets/configurations from keys.
 - Trigger Smaart generator, capture, delay calculation, and active trace visibility actions.
 
@@ -29,10 +33,20 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 
 Default discovery settings (overridable in Stream Deck global settings):
 
-- Lake Controller host: `192.168.0.10` on port `1024`
-- L-Acoustics discovery subnet: `192.168.0.0/24`
+- Lake Controller host: *(optional)* — leave blank to auto-detect:
+  - local **APIPA** (`169.254.x.x`) via broadcast probe (no full scan), otherwise
+  - the most likely non-LA private /24 from your NICs (it skips `192.168.1.0/24` by default)
+- Lake Port: `1024`
+- L-Acoustics discovery subnet: `192.168.1.0/24`
 - Optional explicit L-Acoustics hosts: `192.168.0.20,192.168.0.21`
 - Smaart host: `127.0.0.1` on port `26000`
+
+Tuning (also in global settings):
+- Poll interval (ms): default `500` (only runs when actions are actually bound)
+- Discovery interval (ms): default `60000`
+- Preset poll interval (ms): default `1500`
+- L-Acoustics max concurrency: default `10`
+- L-Acoustics request timeout (ms): default `1200`
 
 ## Repository layout
 
@@ -64,5 +78,13 @@ Default discovery settings (overridable in Stream Deck global settings):
 ## Build & install
 
 1. Install dependencies: `npm install`
-2. Build the plugin: `npm run build`
+2. Typecheck + build: `npm run check`
 3. Copy `com.jvhtec.lake-smaart.sdPlugin` into your Stream Deck plugins folder.
+
+### Useful scripts
+
+- `npm run build` — compile TypeScript to `com.jvhtec.lake-smaart.sdPlugin/dist`
+- `npm run watch` — rebuild on file changes
+- `npm run typecheck` — run TypeScript typechecking without emitting files
+- `npm run clean` — remove `dist/`
+- `npm run check` — `typecheck` + `build`

@@ -48,7 +48,7 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
 function loadSettings(settings) {
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort', 'devicePollIntervalMs', 'deviceDiscoveryIntervalMs', 'presetPollIntervalMs', 'laMaxConcurrency', 'laRequestTimeoutMs'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -62,7 +62,7 @@ function loadSettings(settings) {
 }
 
 function loadGlobalSettings(settings) {
-    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort', 'devicePollIntervalMs', 'deviceDiscoveryIntervalMs', 'presetPollIntervalMs', 'laMaxConcurrency', 'laRequestTimeoutMs'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el && settings[field] !== undefined) {
@@ -76,7 +76,7 @@ function saveSettings() {
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort', 'devicePollIntervalMs', 'deviceDiscoveryIntervalMs', 'presetPollIntervalMs', 'laMaxConcurrency', 'laRequestTimeoutMs'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -105,7 +105,13 @@ function saveGlobalSettings() {
         laAuthUser: document.getElementById('laAuthUser')?.value || '',
         laAuthPass: document.getElementById('laAuthPass')?.value || '',
         smaartHost: document.getElementById('smaartHost')?.value || '',
-        smaartPort: document.getElementById('smaartPort')?.value || ''
+        smaartPort: document.getElementById('smaartPort')?.value || '',
+
+        devicePollIntervalMs: document.getElementById('devicePollIntervalMs')?.value || '',
+        deviceDiscoveryIntervalMs: document.getElementById('deviceDiscoveryIntervalMs')?.value || '',
+        presetPollIntervalMs: document.getElementById('presetPollIntervalMs')?.value || '',
+        laMaxConcurrency: document.getElementById('laMaxConcurrency')?.value || '',
+        laRequestTimeoutMs: document.getElementById('laRequestTimeoutMs')?.value || ''
     };
 
     websocket.send(JSON.stringify({
