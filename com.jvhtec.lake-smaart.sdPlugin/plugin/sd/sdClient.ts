@@ -151,6 +151,15 @@ export class SDClient {
         });
     }
 
+    public openUrl(url: string) {
+        this.send({
+            event: 'openUrl',
+            payload: {
+                url,
+            },
+        });
+    }
+
     public logMessage(message: string) {
         this.send({
             event: 'logMessage',

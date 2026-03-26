@@ -25,7 +25,6 @@ export class PresetRecallAction implements Action {
             }
         });
     }
-    }
 
     onWillAppear(event: WillAppearEvent): void {
         const targetId = event.payload.settings.targetId;

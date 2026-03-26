@@ -123,6 +123,10 @@ export interface SendToPluginEvent extends SDEvent {
     payload: any;
 }
 
+export interface PropertyInspectorDidAppearEvent extends SDEvent {
+    event: 'propertyInspectorDidAppear';
+}
+
 export type IncomingEvent =
     | KeyDownEvent
     | KeyUpEvent
@@ -133,4 +137,5 @@ export type IncomingEvent =
     | WillDisappearEvent
     | DidReceiveSettingsEvent
     | DidReceiveGlobalSettingsEvent
-    | SendToPluginEvent;
+    | SendToPluginEvent
+    | PropertyInspectorDidAppearEvent;

@@ -92,7 +92,7 @@ export class LakeBackend implements Backend {
             const mutes = await Promise.all(group.muteMembers.map((member) => this.readMute(member.module)));
             const gains = await Promise.all(group.gainMembers.map((member) => this.readGain(member.module)));
             const muteState = mutes.every((m) => m === true);
-            const gainAvg = gains.length > 0 ? gains.reduce((sum, val) => sum + (val ?? 0), 0) / gains.length : undefined;
+            const gainAvg = gains.length > 0 ? gains.reduce((sum: number, val) => sum + (val ?? 0), 0 as number) / gains.length : undefined;
             return {
                 online: true,
                 mute: muteState,
