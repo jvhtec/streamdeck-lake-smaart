@@ -174,6 +174,12 @@ function refreshCatalog() {
     requestCatalog();
 }
 
+function onDeviceChange() {
+    var newDeviceId = document.getElementById('deviceId').value;
+    updateSelectors(newDeviceId, null);
+    saveSettings();
+}
+
 function updateSelectors(selectedDeviceId, selectedTargetId) {
     var deviceSelect = document.getElementById('deviceId');
     var targetSelect = document.getElementById('targetId');
@@ -188,7 +194,8 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     devices.forEach(function(device) {
         var option = document.createElement('option');
         option.value = device.id;
-        option.textContent = device.name;
+        var prefix = device.backend === 'lake' ? '[Lake] ' : '[LA] ';
+        option.textContent = prefix + device.name;
         deviceSelect.appendChild(option);
     });
 
@@ -241,7 +248,7 @@ export const KEY_HTML = `<!DOCTYPE html>
             <div class="sdpi-heading">Target</div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Device</div>
-                <select class="sdpi-item-value select" id="deviceId" onchange="saveSettings()"></select>
+                <select class="sdpi-item-value select" id="deviceId" onchange="onDeviceChange()"></select>
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Target</div>
@@ -313,7 +320,7 @@ export const DIAL_HTML = `<!DOCTYPE html>
         <div class="sdpi-heading">Target</div>
         <div class="sdpi-item">
             <div class="sdpi-item-label">Device</div>
-            <select class="sdpi-item-value select" id="deviceId" onchange="saveSettings()"></select>
+            <select class="sdpi-item-value select" id="deviceId" onchange="onDeviceChange()"></select>
         </div>
         <div class="sdpi-item">
             <div class="sdpi-item-label">Target</div>
