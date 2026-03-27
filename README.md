@@ -34,6 +34,8 @@ Default discovery settings (overridable in Stream Deck global settings):
 - Optional explicit L-Acoustics hosts: `192.168.0.20,192.168.0.21`
 - Smaart host: `127.0.0.1` on port `26000`
 
+Per-action target settings (Mute, Preset Recall, and Level dial) include a **Target Device** selector so you can force Lake or L-Acoustics routing, or leave it on **Auto (All)** and pick from all discovered devices.
+
 ## Repository layout
 
 ```
