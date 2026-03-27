@@ -71,6 +71,8 @@ const pluginPath = __dirname;
 const hasUnsafePathChars = /[#?]/.test(pluginPath);
 let piServer: PiServer | null = null;
 let piServerPort = 0;
+let piServerHost = '127.0.0.1';
+let piServerToken = '';
 
 if (hasUnsafePathChars) {
     piServer = new PiServer({
@@ -86,10 +88,12 @@ if (hasUnsafePathChars) {
             });
         },
     });
-    piServer.start().then((port) => {
-        piServerPort = port;
+    piServer.start().then((assignedPort) => {
+        piServerPort = assignedPort;
+        piServerHost = piServer!.getBoundAddress();
+        piServerToken = piServer!.getSessionToken();
         console.log(`[PI Fallback] Plugin path contains special characters.`);
-        console.log(`[PI Fallback] Web-based inspector available at http://localhost:${port}/`);
+        console.log(`[PI Fallback] Web-based inspector available at http://${piServerHost}:${piServerPort}/`);
     }).catch((err) => {
         console.error('[PI Fallback] Failed to start fallback server:', err);
     });
@@ -107,7 +111,7 @@ sdClient.onEvents((event) => {
     if (piServer && piServerPort && event.event === 'propertyInspectorDidAppear') {
         const isDialAction = event.action === 'com.jvhtec.lake-smaart.level';
         const page = isDialAction ? 'dial' : 'key';
-        const url = `http://localhost:${piServerPort}/${page}?action=${encodeURIComponent(event.action)}&context=${encodeURIComponent(event.context)}&wsPort=${piServerPort}`;
+        const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(event.action)}&context=${encodeURIComponent(event.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
         sdClient.openUrl(url);
     }
 

@@ -48,20 +48,24 @@ let websocket = null;
 let action = '';
 let context = '';
 let catalog = { devices: [], targets: [] };
+let pendingDeviceId = null;
+let pendingTargetId = null;
 
 (function init() {
     const params = new URLSearchParams(window.location.search);
     action = params.get('action') || '';
     context = params.get('context') || '';
     const wsPort = params.get('wsPort') || location.port;
+    const token = params.get('token') || '';
 
-    websocket = new WebSocket('ws://127.0.0.1:' + wsPort);
+    websocket = new WebSocket('ws://' + location.hostname + ':' + wsPort);
 
     websocket.onopen = function () {
         websocket.send(JSON.stringify({
             type: 'init',
             action: action,
-            context: context
+            context: context,
+            token: token
         }));
         websocket.send(JSON.stringify({ type: 'getCatalog' }));
     };
@@ -76,7 +80,11 @@ let catalog = { devices: [], targets: [] };
         }
         if (msg.type === 'catalog') {
             catalog = { devices: msg.devices || [], targets: msg.targets || [] };
-            updateSelectors();
+            var devId = pendingDeviceId;
+            var tgtId = pendingTargetId;
+            pendingDeviceId = null;
+            pendingTargetId = null;
+            updateSelectors(devId, tgtId);
         }
     };
 
@@ -94,7 +102,12 @@ function loadSettings(settings) {
             input.value = settings[input.id] != null ? settings[input.id] : '';
         }
     });
-    updateSelectors(settings.deviceId, settings.targetId);
+    if (catalog.devices.length > 0 || catalog.targets.length > 0) {
+        updateSelectors(settings.deviceId, settings.targetId);
+    } else {
+        pendingDeviceId = settings.deviceId || null;
+        pendingTargetId = settings.targetId || null;
+    }
     if (typeof updateUI === 'function') updateUI();
 }
 
