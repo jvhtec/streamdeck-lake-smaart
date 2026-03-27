@@ -12,6 +12,7 @@ import { KeySmaartGenAction } from './actions/keySmaartGen';
 import { KeySmaartCaptureAction } from './actions/keySmaartCapture';
 import { KeySmaartComputeDelayAction } from './actions/keySmaartComputeDelay';
 import { KeySmaartTraceToggleAction } from './actions/keySmaartTraceToggle';
+import { SmaartGeneratorGainDialAction } from './actions/smaartGeneratorGainDialAction';
 import { PiServer } from './piServer';
 
 const args = process.argv.slice(2);
@@ -61,6 +62,7 @@ const router = new Router(sdClient);
 router.registerAction('com.jvhtec.lake-smaart.level', new LevelEncoderAction(sdClient, deviceManager));
 router.registerAction('com.jvhtec.lake-smaart.mute', new MuteAction(sdClient, deviceManager));
 router.registerAction('com.jvhtec.lake-smaart.presetRecall', new PresetRecallAction(sdClient, deviceManager));
+router.registerAction('com.jvhtec.lake-smaart.smaartgengain', new SmaartGeneratorGainDialAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartgen', new KeySmaartGenAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartcapture', new KeySmaartCaptureAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartdelay', new KeySmaartComputeDelayAction(sdClient, smaartClient));
@@ -113,7 +115,9 @@ sdClient.onEvents((event) => {
         const piEvent = event;
         piServerReady.then(() => {
             if (!piServerPort) return;
-            const isDialAction = piEvent.action === 'com.jvhtec.lake-smaart.level';
+            const isDialAction =
+                piEvent.action === 'com.jvhtec.lake-smaart.level' ||
+                piEvent.action === 'com.jvhtec.lake-smaart.smaartgengain';
             const page = isDialAction ? 'dial' : 'key';
             const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(piEvent.action)}&context=${encodeURIComponent(piEvent.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
             sdClient.openUrl(url);

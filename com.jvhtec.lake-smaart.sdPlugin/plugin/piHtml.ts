@@ -57,6 +57,27 @@ let pendingDeviceId = null;
 let pendingTargetId = null;
 let lastGlobalSettings = {};
 
+function getActionName() {
+    var parts = action.split('.');
+    return parts[parts.length - 1] || '';
+}
+
+function isSmaartAction() {
+    return getActionName().startsWith('smaart');
+}
+
+function isSmaartGeneratorGainAction() {
+    return getActionName() === 'smaartgengain';
+}
+
+function isMuteAction() {
+    return getActionName() === 'mute';
+}
+
+function isPresetAction() {
+    return getActionName() === 'presetRecall';
+}
+
 (function init() {
     const params = new URLSearchParams(window.location.search);
     action = params.get('action') || '';
@@ -126,6 +147,7 @@ function loadGlobalSettings(settings) {
             el.value = settings[field];
         }
     });
+    if (typeof updateUI === 'function') updateUI();
 }
 
 function saveSettings() {
@@ -185,7 +207,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     var targetSelect = document.getElementById('targetId');
     var noDevices = document.getElementById('noDevices');
     if (!deviceSelect || !targetSelect) return;
-    if (action.includes('smaart')) return;
+    if (isSmaartAction()) return;
 
     var devices = catalog.devices || [];
     var targets = catalog.targets || [];
@@ -212,8 +234,8 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     var filteredTargets = targets.filter(function(target) {
         if (target.deviceId !== activeDevice) return false;
-        if (action.includes('preset')) return target.kind === 'preset';
-        if (action.includes('mute')) return target.supports && target.supports.includes('mute');
+        if (isPresetAction()) return target.kind === 'preset';
+        if (isMuteAction()) return target.supports && target.supports.includes('mute');
         return target.supports && target.supports.includes('level');
     });
 
@@ -287,20 +309,24 @@ function updateUI() {
     var smaartControls = document.getElementById('smaartControls');
     var lakeGlobalSettings = document.getElementById('lakeGlobalSettings');
     var smaartGlobalSettings = document.getElementById('smaartGlobalSettings');
-    var isSmaart = action.includes('smaart');
+    var isSmaart = isSmaartAction();
 
     if (muteOptions) {
-        muteOptions.style.display = action.includes('mute') ? 'flex' : 'none';
+        muteOptions.style.display = isMuteAction() ? 'flex' : 'none';
     }
     if (presetOptions) {
-        presetOptions.style.display = action.includes('preset') ? 'flex' : 'none';
+        presetOptions.style.display = isPresetAction() ? 'flex' : 'none';
     }
     if (targetControls && smaartControls) {
         targetControls.style.display = isSmaart ? 'none' : 'block';
         smaartControls.style.display = isSmaart ? 'block' : 'none';
     }
-    if (lakeGlobalSettings) lakeGlobalSettings.style.display = isSmaart ? 'none' : 'block';
-    if (smaartGlobalSettings) smaartGlobalSettings.style.display = isSmaart ? 'block' : 'none';
+    if (lakeGlobalSettings) {
+        lakeGlobalSettings.style.display = isSmaart ? 'none' : 'block';
+    }
+    if (smaartGlobalSettings) {
+        smaartGlobalSettings.style.display = isSmaart ? 'block' : 'none';
+    }
 }
 ${buildScript('updateUI();')}
     </script>
@@ -317,47 +343,97 @@ export const DIAL_HTML = `<!DOCTYPE html>
 <body>
     <div class="sdpi-wrapper">
         <div class="fallback-banner">Web-based fallback inspector (plugin path contains special characters).</div>
-        <div class="sdpi-heading">Target</div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Device</div>
-            <select class="sdpi-item-value select" id="deviceId" onchange="onDeviceChange()"></select>
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Target</div>
-            <select class="sdpi-item-value select" id="targetId" onchange="saveSettings()"></select>
-        </div>
-        <div class="sdpi-item" id="noDevices" style="display:none;">
-            <div class="sdpi-item-value">No devices found.</div>
-        </div>
-        <div class="sdpi-item">
-            <button class="sdpi-item-value" type="button" onclick="refreshCatalog()">Refresh Devices</button>
+        <div id="targetControls">
+            <div class="sdpi-heading">Target</div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Device</div>
+                <select class="sdpi-item-value select" id="deviceId" onchange="onDeviceChange()"></select>
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Target</div>
+                <select class="sdpi-item-value select" id="targetId" onchange="saveSettings()"></select>
+            </div>
+            <div class="sdpi-item" id="noDevices" style="display:none;">
+                <div class="sdpi-item-value">No devices found.</div>
+            </div>
+            <div class="sdpi-item">
+                <button class="sdpi-item-value" type="button" onclick="refreshCatalog()">Refresh Devices</button>
+            </div>
         </div>
 
-        <div class="sdpi-heading">Level Options</div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Mode</div>
-            <select class="sdpi-item-value select" id="levelMode" onchange="saveSettings()">
-                <option value="gain">Gain (dB)</option>
-                <option value="volume">Volume</option>
-            </select>
+        <div id="smaartControls" style="display:none;">
+            <div class="sdpi-item-message">Rotate to adjust Smaart generator gain. Press the dial to toggle the generator on or off.</div>
         </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Step Size</div>
-            <input class="sdpi-item-value" type="number" id="stepSize" onchange="saveSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Min</div>
-            <input class="sdpi-item-value" type="number" id="minLevel" onchange="saveSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Max</div>
-            <input class="sdpi-item-value" type="number" id="maxLevel" onchange="saveSettings()">
+
+        <div class="sdpi-heading" id="actionOptionsHeading">Level Options</div>
+        <div id="dialOptions">
+            <div class="sdpi-item" id="levelModeRow">
+                <div class="sdpi-item-label">Mode</div>
+                <select class="sdpi-item-value select" id="levelMode" onchange="saveSettings()">
+                    <option value="gain">Gain (dB)</option>
+                    <option value="volume">Volume</option>
+                </select>
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label" id="stepSizeLabel">Step Size</div>
+                <input class="sdpi-item-value" type="number" id="stepSize" onchange="saveSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label" id="minLevelLabel">Min</div>
+                <input class="sdpi-item-value" type="number" id="minLevel" onchange="saveSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label" id="maxLevelLabel">Max</div>
+                <input class="sdpi-item-value" type="number" id="maxLevel" onchange="saveSettings()">
+            </div>
         </div>
         <div class="sdpi-heading">Global Discovery Settings</div>
 ${LAKE_GLOBAL_FIELDS}
+${SMAART_GLOBAL_FIELDS}
     </div>
     <script>
-${buildScript('')}
+function updateUI() {
+    var isSmaart = isSmaartAction();
+    var isSmaartGain = isSmaartGeneratorGainAction();
+    var targetControls = document.getElementById('targetControls');
+    var smaartControls = document.getElementById('smaartControls');
+    var levelModeRow = document.getElementById('levelModeRow');
+    var actionOptionsHeading = document.getElementById('actionOptionsHeading');
+    var stepSizeLabel = document.getElementById('stepSizeLabel');
+    var minLevelLabel = document.getElementById('minLevelLabel');
+    var maxLevelLabel = document.getElementById('maxLevelLabel');
+    var lakeGlobalSettings = document.getElementById('lakeGlobalSettings');
+    var smaartGlobalSettings = document.getElementById('smaartGlobalSettings');
+
+    if (targetControls) {
+        targetControls.style.display = isSmaart ? 'none' : 'block';
+    }
+    if (smaartControls) {
+        smaartControls.style.display = isSmaartGain ? 'block' : 'none';
+    }
+    if (levelModeRow) {
+        levelModeRow.style.display = isSmaart ? 'none' : 'flex';
+    }
+    if (actionOptionsHeading) {
+        actionOptionsHeading.textContent = isSmaartGain ? 'Generator Gain Options' : 'Level Options';
+    }
+    if (stepSizeLabel) {
+        stepSizeLabel.textContent = isSmaartGain ? 'Step Size (dB)' : 'Step Size';
+    }
+    if (minLevelLabel) {
+        minLevelLabel.textContent = isSmaartGain ? 'Min Gain (dB)' : 'Min';
+    }
+    if (maxLevelLabel) {
+        maxLevelLabel.textContent = isSmaartGain ? 'Max Gain (dB)' : 'Max';
+    }
+    if (lakeGlobalSettings) {
+        lakeGlobalSettings.style.display = isSmaart ? 'none' : 'block';
+    }
+    if (smaartGlobalSettings) {
+        smaartGlobalSettings.style.display = isSmaart ? 'block' : 'none';
+    }
+}
+${buildScript('updateUI();')}
     </script>
 </body>
 </html>`;

@@ -19,8 +19,15 @@ export class KeySmaartGenAction implements Action {
 
     onKeyDown(event: IncomingEvent): void {
         const e = event as KeyDownEvent;
-        this.state = !this.state;
-        this.smaart.setGenerator(this.state);
+        const nextState = !this.state;
+
+        if (!this.smaart.setGenerator(nextState)) {
+            this.sdClient.showAlert(e.context);
+            return;
+        }
+
+        this.state = nextState;
         this.sdClient.setState(e.context, this.state ? 1 : 0);
+        this.sdClient.showOk(e.context);
     }
 }

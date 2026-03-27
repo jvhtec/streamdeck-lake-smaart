@@ -4,6 +4,7 @@
   "description": "Stream Deck plugin for Lake LM and Smaart",
   "scripts": {
     "build": "tsc",
+    "postbuild": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/copy-runtime-deps.ps1",
     "watch": "tsc -w"
   },
   "dependencies": {

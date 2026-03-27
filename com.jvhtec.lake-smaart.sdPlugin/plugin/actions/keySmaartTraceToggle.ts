@@ -1,7 +1,7 @@
 import { Action } from '../core/router';
 import { IncomingEvent, KeyDownEvent, WillAppearEvent } from '../sd/events';
 import { SDClient } from '../sd/sdClient';
-import { SmaartClient } from '../smaart/smaartClient';
+import { SmaartClient, SmaartCommandResult } from '../smaart/smaartClient';
 
 export class KeySmaartTraceToggleAction implements Action {
     private smaart: SmaartClient;
@@ -17,10 +17,23 @@ export class KeySmaartTraceToggleAction implements Action {
         this.sdClient.setState(event.context, this.visible ? 1 : 0);
     }
 
-    onKeyDown(event: IncomingEvent): void {
+    async onKeyDown(event: IncomingEvent): Promise<void> {
         const e = event as KeyDownEvent;
-        this.visible = !this.visible;
-        this.smaart.setActiveTraceVisible(this.visible);
+        const nextVisible = !this.visible;
+
+        const result = await this.smaart.setActiveTraceVisible(nextVisible);
+        if (!result.ok) {
+            this.logFailure('trace visibility', result);
+            this.sdClient.showAlert(e.context);
+            return;
+        }
+
+        this.visible = nextVisible;
         this.sdClient.setState(e.context, this.visible ? 1 : 0);
+        this.sdClient.showOk(e.context);
+    }
+
+    private logFailure(actionName: string, result: SmaartCommandResult) {
+        this.sdClient.logMessage(`[Smaart] ${actionName} failed: ${result.error || 'Unknown error'}`);
     }
 }

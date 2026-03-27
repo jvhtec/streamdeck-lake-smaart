@@ -3,6 +3,27 @@ let uuid = null;
 let actionInfo = null;
 let catalog = { devices: [], targets: [] };
 
+function getActionId() {
+    return actionInfo?.action || '';
+}
+
+function getActionName() {
+    const parts = getActionId().split('.');
+    return parts[parts.length - 1] || '';
+}
+
+function isSmaartAction() {
+    return getActionName().startsWith('smaart');
+}
+
+function isMuteAction() {
+    return getActionName() === 'mute';
+}
+
+function isPresetAction() {
+    return getActionName() === 'presetRecall';
+}
+
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
     uuid = inPropertyInspectorUUID;
     actionInfo = JSON.parse(inActionInfo);
@@ -116,20 +137,19 @@ function saveGlobalSettings() {
 }
 
 function updateUI() {
-    const action = actionInfo.action || '';
     const muteOptions = document.getElementById('muteOptions');
     const presetOptions = document.getElementById('presetOptions');
     const targetControls = document.getElementById('targetControls');
     const smaartControls = document.getElementById('smaartControls');
 
     if (muteOptions) {
-        muteOptions.style.display = action.includes('mute') ? 'flex' : 'none';
+        muteOptions.style.display = isMuteAction() ? 'flex' : 'none';
     }
     if (presetOptions) {
-        presetOptions.style.display = action.includes('preset') ? 'flex' : 'none';
+        presetOptions.style.display = isPresetAction() ? 'flex' : 'none';
     }
     if (targetControls && smaartControls) {
-        const isSmaart = action.includes('smaart');
+        const isSmaart = isSmaartAction();
         targetControls.style.display = isSmaart ? 'none' : 'block';
         smaartControls.style.display = isSmaart ? 'block' : 'none';
     }
@@ -153,8 +173,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     const targetSelect = document.getElementById('targetId');
     const noDevices = document.getElementById('noDevices');
     if (!deviceSelect || !targetSelect) return;
-    const action = actionInfo.action || '';
-    if (action.includes('smaart')) return;
+    if (isSmaartAction()) return;
 
     const devices = catalog.devices || [];
     const targets = catalog.targets || [];
@@ -180,8 +199,8 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     const filteredTargets = targets.filter((target) => {
         if (target.deviceId !== activeDevice) return false;
-        if (action.includes('preset')) return target.kind === 'preset';
-        if (action.includes('mute')) return target.supports && target.supports.includes('mute');
+        if (isPresetAction()) return target.kind === 'preset';
+        if (isMuteAction()) return target.supports && target.supports.includes('mute');
         return target.supports && target.supports.includes('level');
     });
 

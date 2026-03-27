@@ -9,67 +9,87 @@
 
 <body>
     <div class="sdpi-wrapper">
-        <div class="sdpi-heading">Target</div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Device</div>
-            <select class="sdpi-item-value select" id="deviceId" onchange="onDeviceChange()"></select>
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Target</div>
-            <select class="sdpi-item-value select" id="targetId" onchange="saveSettings()"></select>
-        </div>
-        <div class="sdpi-item" id="noDevices" style="display:none;">
-            <div class="sdpi-item-value">No devices found.</div>
-        </div>
-        <div class="sdpi-item">
-            <button class="sdpi-item-value" type="button" onclick="refreshCatalog()">Refresh Devices</button>
+        <div id="targetControls">
+            <div class="sdpi-heading">Target</div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Device</div>
+                <select class="sdpi-item-value select" id="deviceId" onchange="onDeviceChange()"></select>
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Target</div>
+                <select class="sdpi-item-value select" id="targetId" onchange="saveSettings()"></select>
+            </div>
+            <div class="sdpi-item" id="noDevices" style="display:none;">
+                <div class="sdpi-item-value">No devices found.</div>
+            </div>
+            <div class="sdpi-item">
+                <button class="sdpi-item-value" type="button" onclick="refreshCatalog()">Refresh Devices</button>
+            </div>
         </div>
 
-        <div class="sdpi-heading">Level Options</div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Mode</div>
-            <select class="sdpi-item-value select" id="levelMode" onchange="saveSettings()">
-                <option value="gain">Gain (dB)</option>
-                <option value="volume">Volume</option>
-            </select>
+        <div id="smaartControls" style="display:none;">
+            <div class="sdpi-item-message">Rotate to adjust Smaart generator gain. Press the dial to toggle the generator on or off.</div>
         </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Step Size</div>
-            <input class="sdpi-item-value" type="number" id="stepSize" onchange="saveSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Min</div>
-            <input class="sdpi-item-value" type="number" id="minLevel" onchange="saveSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Max</div>
-            <input class="sdpi-item-value" type="number" id="maxLevel" onchange="saveSettings()">
+
+        <div class="sdpi-heading" id="actionOptionsHeading">Level Options</div>
+        <div id="dialOptions">
+            <div class="sdpi-item" id="levelModeRow">
+                <div class="sdpi-item-label">Mode</div>
+                <select class="sdpi-item-value select" id="levelMode" onchange="saveSettings()">
+                    <option value="gain">Gain (dB)</option>
+                    <option value="volume">Volume</option>
+                </select>
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label" id="stepSizeLabel">Step Size</div>
+                <input class="sdpi-item-value" type="number" id="stepSize" onchange="saveSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label" id="minLevelLabel">Min</div>
+                <input class="sdpi-item-value" type="number" id="minLevel" onchange="saveSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label" id="maxLevelLabel">Max</div>
+                <input class="sdpi-item-value" type="number" id="maxLevel" onchange="saveSettings()">
+            </div>
         </div>
 
         <div class="sdpi-heading">Global Discovery Settings</div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Lake Host</div>
-            <input class="sdpi-item-value" type="text" id="lakeHost" onchange="saveGlobalSettings()">
+        <div id="lakeGlobalSettings">
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Lake Host</div>
+                <input class="sdpi-item-value" type="text" id="lakeHost" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Lake Port</div>
+                <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">L-Acoustics Subnet</div>
+                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.0.0/24" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">L-Acoustics Hosts</div>
+                <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.0.20,192.168.0.21" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">HTTP User</div>
+                <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">HTTP Pass</div>
+                <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
+            </div>
         </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Lake Port</div>
-            <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">L-Acoustics Subnet</div>
-            <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.0.0/24" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">L-Acoustics Hosts</div>
-            <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.0.20,192.168.0.21" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">HTTP User</div>
-            <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">HTTP Pass</div>
-            <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
+        <div id="smaartGlobalSettings" style="display:none;">
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Smaart Host</div>
+                <input class="sdpi-item-value" type="text" id="smaartHost" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Smaart Port</div>
+                <input class="sdpi-item-value" type="number" id="smaartPort" onchange="saveGlobalSettings()">
+            </div>
         </div>
     </div>
     <script>
@@ -78,6 +98,23 @@ let uuid = null;
 let actionInfo = null;
 let catalog = { devices: [], targets: [] };
 let lastGlobalSettings = {};
+
+function getActionId() {
+    return actionInfo?.action || '';
+}
+
+function getActionName() {
+    const parts = getActionId().split('.');
+    return parts[parts.length - 1] || '';
+}
+
+function isSmaartAction() {
+    return getActionName().startsWith('smaart');
+}
+
+function isSmaartGeneratorGainAction() {
+    return getActionName() === 'smaartgengain';
+}
 
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
     uuid = inPropertyInspectorUUID;
@@ -119,12 +156,14 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
             }
         }
     };
+
+    setTimeout(() => updateUI(), 100);
 }
 
 function loadSettings(settings) {
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -139,13 +178,14 @@ function loadSettings(settings) {
 
 function loadGlobalSettings(settings) {
     lastGlobalSettings = Object.assign({}, settings);
-    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass'];
+    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el && settings[field] !== undefined) {
             el.value = settings[field];
         }
     });
+    updateUI();
 }
 
 function saveSettings() {
@@ -153,7 +193,7 @@ function saveSettings() {
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -175,7 +215,7 @@ function saveSettings() {
 function saveGlobalSettings() {
     if (!websocket) return;
     const payload = Object.assign({}, lastGlobalSettings);
-    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass'];
+    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el) {
@@ -191,22 +231,45 @@ function saveGlobalSettings() {
 }
 
 function updateUI() {
-    const action = actionInfo.action || '';
-    const muteOptions = document.getElementById('muteOptions');
-    const presetOptions = document.getElementById('presetOptions');
+    const isSmaart = isSmaartAction();
+    const isSmaartGain = isSmaartGeneratorGainAction();
+
     const targetControls = document.getElementById('targetControls');
     const smaartControls = document.getElementById('smaartControls');
+    const levelModeRow = document.getElementById('levelModeRow');
+    const actionOptionsHeading = document.getElementById('actionOptionsHeading');
+    const stepSizeLabel = document.getElementById('stepSizeLabel');
+    const minLevelLabel = document.getElementById('minLevelLabel');
+    const maxLevelLabel = document.getElementById('maxLevelLabel');
+    const lakeGlobalSettings = document.getElementById('lakeGlobalSettings');
+    const smaartGlobalSettings = document.getElementById('smaartGlobalSettings');
 
-    if (muteOptions) {
-        muteOptions.style.display = action.includes('mute') ? 'flex' : 'none';
-    }
-    if (presetOptions) {
-        presetOptions.style.display = action.includes('preset') ? 'flex' : 'none';
-    }
-    if (targetControls && smaartControls) {
-        const isSmaart = action.includes('smaart');
+    if (targetControls) {
         targetControls.style.display = isSmaart ? 'none' : 'block';
-        smaartControls.style.display = isSmaart ? 'block' : 'none';
+    }
+    if (smaartControls) {
+        smaartControls.style.display = isSmaartGain ? 'block' : 'none';
+    }
+    if (levelModeRow) {
+        levelModeRow.style.display = isSmaart ? 'none' : 'flex';
+    }
+    if (actionOptionsHeading) {
+        actionOptionsHeading.textContent = isSmaartGain ? 'Generator Gain Options' : 'Level Options';
+    }
+    if (stepSizeLabel) {
+        stepSizeLabel.textContent = isSmaartGain ? 'Step Size (dB)' : 'Step Size';
+    }
+    if (minLevelLabel) {
+        minLevelLabel.textContent = isSmaartGain ? 'Min Gain (dB)' : 'Min';
+    }
+    if (maxLevelLabel) {
+        maxLevelLabel.textContent = isSmaartGain ? 'Max Gain (dB)' : 'Max';
+    }
+    if (lakeGlobalSettings) {
+        lakeGlobalSettings.style.display = isSmaart ? 'none' : 'block';
+    }
+    if (smaartGlobalSettings) {
+        smaartGlobalSettings.style.display = isSmaart ? 'block' : 'none';
     }
 }
 
@@ -234,8 +297,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     const targetSelect = document.getElementById('targetId');
     const noDevices = document.getElementById('noDevices');
     if (!deviceSelect || !targetSelect) return;
-    const action = actionInfo.action || '';
-    if (action.includes('smaart')) return;
+    if (isSmaartAction()) return;
 
     const devices = catalog.devices || [];
     const targets = catalog.targets || [];
@@ -262,8 +324,6 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     const filteredTargets = targets.filter((target) => {
         if (target.deviceId !== activeDevice) return false;
-        if (action.includes('preset')) return target.kind === 'preset';
-        if (action.includes('mute')) return target.supports && target.supports.includes('mute');
         return target.supports && target.supports.includes('level');
     });
 

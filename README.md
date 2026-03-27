@@ -13,6 +13,7 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 | Level + Press-to-Mute (Dial) | ![Dial icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_dial.png) |
 | Preset Recall | ![Preset icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_preset.png) |
 | Mute | ![Mute icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_mute.png) |
+| Smaart Generator Gain (Dial) | ![Smaart generator icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_gen.png) |
 | Smaart Generator | ![Smaart generator icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_gen.png) |
 | Smaart Capture | ![Smaart capture icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
 | Smaart Compute Delay | ![Smaart compute delay icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_smaart_capture.png) |
@@ -23,7 +24,8 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 - Control Lake LM module/group gain and mute with Stream Deck+ encoders.
 - Toggle mute on Lake LM modules/groups and L-Acoustics outputs.
 - Recall Lake and L-Acoustics presets/configurations from keys.
-- Trigger Smaart generator, capture, delay calculation, and active trace visibility actions.
+- Adjust Smaart generator gain from a dial and press the dial to toggle the generator on or off.
+- Trigger Smaart generator and measurement-focused actions for the currently active Smaart measurement.
 
 ## Configuration
 
@@ -67,3 +69,5 @@ Default discovery settings (overridable in Stream Deck global settings):
 1. Install dependencies: `npm install`
 2. Build the plugin: `npm run build`
 3. Copy `com.jvhtec.lake-smaart.sdPlugin` into your Stream Deck plugins folder.
+
+`npm run build` also stages the runtime `ws` dependency inside `com.jvhtec.lake-smaart.sdPlugin/node_modules` so the copied plugin bundle can start outside the repo.

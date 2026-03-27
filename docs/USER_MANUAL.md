@@ -72,17 +72,22 @@ Use the **Refresh Devices** button after changing discovery settings.
 
 - **Press**: Toggles the Smaart generator state.
 
+### Smaart Generator Gain (Dial)
+
+- **Rotate**: Adjusts the Smaart signal generator gain in dB.
+- **Press**: Toggles the Smaart signal generator on or off.
+
 ### Smaart Capture (Button)
 
-- **Press**: Triggers a Smaart capture action.
+- **Press**: Triggers capture for the currently active Smaart measurement.
 
 ### Smaart Compute Delay (Button)
 
-- **Press**: Requests delay computation in Smaart for the active measurement.
+- **Press**: Requests Auto Find Delay for the currently active transfer function measurement.
 
 ### Smaart Toggle Trace (Button)
 
-- **Press**: Toggles visibility for the active trace in Smaart.
+- **Press**: Toggles visibility for the currently active Smaart trace.
 
 ## Troubleshooting
 
@@ -90,6 +95,7 @@ Use the **Refresh Devices** button after changing discovery settings.
 - **HTTP 403 errors**: L-Acoustics Digest authentication may be enabled. Enter credentials in global settings.
 - **No Lake response**: Confirm the Lake Controller host/port and network path to the device.
 - **No Smaart response**: Confirm Smaart is running and the API host/port are correct.
+- **Capture/Delay/Trace do nothing**: Make sure a live Smaart measurement is active or selected. Smaart only accepts capture, Auto Find Delay, and trace-visibility commands when it reports an active measurement context.
 
 ## Support references
 

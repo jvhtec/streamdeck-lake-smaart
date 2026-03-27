@@ -1,4 +1,5 @@
 {
+    "UUID": "com.jvhtec.lake-smaart",
     "Actions": [
         {
             "Icon": "images/icon_dial",
@@ -46,6 +47,30 @@
             "States": [
                 {
                     "Image": "images/icon_mute",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_smaart_gen",
+            "Name": "Smaart Generator Gain",
+            "UUID": "com.jvhtec.lake-smaart.smaartgengain",
+            "PropertyInspectorPath": "ui/dial.html",
+            "Controllers": [
+                "Knob"
+            ],
+            "Encoder": {
+                "layout": "layouts/dialValue.json"
+            },
+            "States": [
+                {
+                    "Image": "images/icon_smaart_gen_off",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                },
+                {
+                    "Image": "images/icon_smaart_gen_on",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
@@ -147,5 +172,8 @@
     "CodePath": "dist/index.js",
     "CodePathMac": "dist/index.js",
     "CodePathWin": "dist/index.js",
+    "Nodejs": {
+        "Version": "20"
+    },
     "Category": "Audio"
 }
