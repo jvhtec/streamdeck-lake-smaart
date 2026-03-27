@@ -134,7 +134,6 @@ function loadGlobalSettings(settings) {
 
 function saveSettings() {
     if (!websocket) return;
-    updateSelectors();
     var globalFields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
     var settings = {};
     var inputs = document.querySelectorAll('.sdpi-item-value');
@@ -149,6 +148,13 @@ function saveSettings() {
     settings.targetDevice = normalizeBackend(settings.targetDevice || 'all');
     var deviceSelect = document.getElementById('deviceId');
     var targetSelect = document.getElementById('targetId');
+    if (deviceSelect) {
+        settings.deviceId = deviceSelect.value || '';
+    }
+    if (targetSelect) {
+        settings.targetId = targetSelect.value || '';
+    }
+    updateSelectors(settings.deviceId, settings.targetId);
     if (deviceSelect) {
         settings.deviceId = deviceSelect.value || '';
     }

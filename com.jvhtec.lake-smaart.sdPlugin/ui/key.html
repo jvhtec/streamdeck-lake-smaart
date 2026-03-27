@@ -169,7 +169,6 @@ function loadGlobalSettings(settings) {
 
 function saveSettings() {
     if (!websocket) return;
-    updateSelectors();
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
@@ -185,6 +184,13 @@ function saveSettings() {
     settings.targetDevice = normalizeBackend(settings.targetDevice || 'all');
     const deviceSelect = document.getElementById('deviceId');
     const targetSelect = document.getElementById('targetId');
+    if (deviceSelect) {
+        settings.deviceId = deviceSelect.value || '';
+    }
+    if (targetSelect) {
+        settings.targetId = targetSelect.value || '';
+    }
+    updateSelectors(settings.deviceId, settings.targetId);
     if (deviceSelect) {
         settings.deviceId = deviceSelect.value || '';
     }
@@ -306,7 +312,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
         if (target.deviceId !== activeDevice) return false;
         if (action.includes('preset')) return target.kind === 'preset';
         if (action.includes('mute')) return target.supports && target.supports.includes('mute');
-        return target.supports && target.supports.includes('level');
+        return target.supports && (target.supports.includes('level') || target.supports.includes('volume'));
     });
 
     targetSelect.innerHTML = '';

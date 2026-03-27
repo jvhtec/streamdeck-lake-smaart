@@ -162,7 +162,6 @@ function loadGlobalSettings(settings) {
 
 function saveSettings() {
     if (!websocket) return;
-    updateSelectors();
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
@@ -178,6 +177,13 @@ function saveSettings() {
     settings.targetDevice = normalizeBackend(settings.targetDevice || 'all');
     const deviceSelect = document.getElementById('deviceId');
     const targetSelect = document.getElementById('targetId');
+    if (deviceSelect) {
+        settings.deviceId = deviceSelect.value || '';
+    }
+    if (targetSelect) {
+        settings.targetId = targetSelect.value || '';
+    }
+    updateSelectors(settings.deviceId, settings.targetId);
     if (deviceSelect) {
         settings.deviceId = deviceSelect.value || '';
     }
