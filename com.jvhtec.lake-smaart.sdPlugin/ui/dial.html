@@ -71,20 +71,13 @@
             <div class="sdpi-item-label">HTTP Pass</div>
             <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
         </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Smaart Host</div>
-            <input class="sdpi-item-value" type="text" id="smaartHost" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Smaart Port</div>
-            <input class="sdpi-item-value" type="number" id="smaartPort" onchange="saveGlobalSettings()">
-        </div>
     </div>
     <script>
 let websocket = null;
 let uuid = null;
 let actionInfo = null;
 let catalog = { devices: [], targets: [] };
+let lastGlobalSettings = {};
 
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
     uuid = inPropertyInspectorUUID;
@@ -131,7 +124,7 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
 function loadSettings(settings) {
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -145,7 +138,8 @@ function loadSettings(settings) {
 }
 
 function loadGlobalSettings(settings) {
-    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    lastGlobalSettings = Object.assign({}, settings);
+    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el && settings[field] !== undefined) {
@@ -159,7 +153,7 @@ function saveSettings() {
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -180,16 +174,14 @@ function saveSettings() {
 
 function saveGlobalSettings() {
     if (!websocket) return;
-    const payload = {
-        lakeHost: document.getElementById('lakeHost')?.value || '',
-        lakePort: document.getElementById('lakePort')?.value || '',
-        laDiscoverySubnet: document.getElementById('laDiscoverySubnet')?.value || '',
-        laDiscoveryHosts: document.getElementById('laDiscoveryHosts')?.value || '',
-        laAuthUser: document.getElementById('laAuthUser')?.value || '',
-        laAuthPass: document.getElementById('laAuthPass')?.value || '',
-        smaartHost: document.getElementById('smaartHost')?.value || '',
-        smaartPort: document.getElementById('smaartPort')?.value || ''
-    };
+    const payload = Object.assign({}, lastGlobalSettings);
+    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass'];
+    fields.forEach((field) => {
+        const el = document.getElementById(field);
+        if (el) {
+            payload[field] = el.value || '';
+        }
+    });
 
     websocket.send(JSON.stringify({
         event: 'setGlobalSettings',

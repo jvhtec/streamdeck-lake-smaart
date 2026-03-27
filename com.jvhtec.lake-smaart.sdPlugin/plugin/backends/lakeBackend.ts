@@ -25,12 +25,17 @@ export class LakeBackend implements Backend {
     }
 
     public async discover(): Promise<DeviceDescriptor[]> {
+        const host = this.settings.host.trim();
+        if (!host) {
+            return [];
+        }
+
         return [
             {
                 id: 'lake_default',
-                name: `Lake LM (${this.settings.host})`,
+                name: `Lake LM (${host})`,
                 backend: 'lake',
-                address: this.settings.host,
+                address: host,
                 online: true,
             },
         ];
