@@ -98,6 +98,10 @@ let lastGlobalSettings = {};
 })();
 
 function loadSettings(settings) {
+    var targetDevice = document.getElementById('targetDevice');
+    if (targetDevice) {
+        targetDevice.value = normalizeBackend(settings.targetDevice || 'all');
+    }
     const globalFields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(function(input) {
@@ -130,6 +134,7 @@ function loadGlobalSettings(settings) {
 
 function saveSettings() {
     if (!websocket) return;
+    updateSelectors();
     var globalFields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
     var settings = {};
     var inputs = document.querySelectorAll('.sdpi-item-value');
@@ -141,6 +146,15 @@ function saveSettings() {
             settings[input.id] = input.value;
         }
     });
+    settings.targetDevice = normalizeBackend(settings.targetDevice || 'all');
+    var deviceSelect = document.getElementById('deviceId');
+    var targetSelect = document.getElementById('targetId');
+    if (deviceSelect) {
+        settings.deviceId = deviceSelect.value || '';
+    }
+    if (targetSelect) {
+        settings.targetId = targetSelect.value || '';
+    }
     websocket.send(JSON.stringify({
         type: 'setSettings',
         context: context,
@@ -174,25 +188,37 @@ function refreshCatalog() {
     requestCatalog();
 }
 
+function normalizeBackend(value) {
+    if (value === 'lacoustics') return 'la_http';
+    if (value === 'lake' || value === 'la_http' || value === 'all') return value;
+    return 'all';
+}
+
 function updateSelectors(selectedDeviceId, selectedTargetId) {
+    var targetDeviceSelect = document.getElementById('targetDevice');
     var deviceSelect = document.getElementById('deviceId');
     var targetSelect = document.getElementById('targetId');
     var noDevices = document.getElementById('noDevices');
-    if (!deviceSelect || !targetSelect) return;
+    if (!targetDeviceSelect || !deviceSelect || !targetSelect) return;
     if (action.includes('smaart')) return;
 
+    var selectedBackend = normalizeBackend(targetDeviceSelect.value || 'all');
+    targetDeviceSelect.value = selectedBackend;
     var devices = catalog.devices || [];
     var targets = catalog.targets || [];
+    var filteredDevices = selectedBackend === 'all'
+        ? devices
+        : devices.filter(function(device) { return device.backend === selectedBackend; });
 
     deviceSelect.innerHTML = '';
-    devices.forEach(function(device) {
+    filteredDevices.forEach(function(device) {
         var option = document.createElement('option');
         option.value = device.id;
         option.textContent = device.name;
         deviceSelect.appendChild(option);
     });
 
-    if (devices.length === 0) {
+    if (filteredDevices.length === 0) {
         if (noDevices) noDevices.style.display = 'flex';
         targetSelect.innerHTML = '';
         return;
@@ -200,14 +226,14 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     if (noDevices) noDevices.style.display = 'none';
 
-    var activeDevice = selectedDeviceId || deviceSelect.value || devices[0].id;
+    var activeDevice = selectedDeviceId || deviceSelect.value || filteredDevices[0].id;
     deviceSelect.value = activeDevice;
 
     var filteredTargets = targets.filter(function(target) {
         if (target.deviceId !== activeDevice) return false;
         if (action.includes('preset')) return target.kind === 'preset';
         if (action.includes('mute')) return target.supports && target.supports.includes('mute');
-        return target.supports && target.supports.includes('level');
+        return target.supports && (target.supports.includes('level') || target.supports.includes('volume'));
     });
 
     targetSelect.innerHTML = '';
@@ -224,6 +250,9 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     if (selectedTargetId) {
         targetSelect.value = selectedTargetId;
     }
+    if (!targetSelect.value && targetSelect.options.length > 0) {
+        targetSelect.value = targetSelect.options[0].value;
+    }
 }`;
 }
 
@@ -239,6 +268,14 @@ export const KEY_HTML = `<!DOCTYPE html>
         <div class="fallback-banner">Web-based fallback inspector (plugin path contains special characters).</div>
         <div id="targetControls">
             <div class="sdpi-heading">Target</div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Target Device</div>
+                <select class="sdpi-item-value select" id="targetDevice" onchange="saveSettings()">
+                    <option value="all">Auto (All)</option>
+                    <option value="lake">Lake</option>
+                    <option value="la_http">L-Acoustics</option>
+                </select>
+            </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Device</div>
                 <select class="sdpi-item-value select" id="deviceId" onchange="saveSettings()"></select>
@@ -311,6 +348,14 @@ export const DIAL_HTML = `<!DOCTYPE html>
     <div class="sdpi-wrapper">
         <div class="fallback-banner">Web-based fallback inspector (plugin path contains special characters).</div>
         <div class="sdpi-heading">Target</div>
+        <div class="sdpi-item">
+            <div class="sdpi-item-label">Target Device</div>
+            <select class="sdpi-item-value select" id="targetDevice" onchange="saveSettings()">
+                <option value="all">Auto (All)</option>
+                <option value="lake">Lake</option>
+                <option value="la_http">L-Acoustics</option>
+            </select>
+        </div>
         <div class="sdpi-item">
             <div class="sdpi-item-label">Device</div>
             <select class="sdpi-item-value select" id="deviceId" onchange="saveSettings()"></select>
