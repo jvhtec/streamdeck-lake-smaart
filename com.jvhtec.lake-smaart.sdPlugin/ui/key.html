@@ -12,6 +12,14 @@
         <div id="targetControls">
             <div class="sdpi-heading">Target</div>
             <div class="sdpi-item">
+                <div class="sdpi-item-label">Target Device</div>
+                <select class="sdpi-item-value select" id="targetDevice" onchange="saveSettings()">
+                    <option value="all">Auto (All)</option>
+                    <option value="lake">Lake</option>
+                    <option value="la_http">L-Acoustics</option>
+                </select>
+            </div>
+            <div class="sdpi-item">
                 <div class="sdpi-item-label">Device</div>
                 <select class="sdpi-item-value select" id="deviceId" onchange="saveSettings()"></select>
             </div>
@@ -129,6 +137,10 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
 }
 
 function loadSettings(settings) {
+    const targetDevice = document.getElementById('targetDevice');
+    if (targetDevice) {
+        targetDevice.value = normalizeBackend(settings.targetDevice || 'all');
+    }
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
         if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
@@ -157,6 +169,7 @@ function loadGlobalSettings(settings) {
 
 function saveSettings() {
     if (!websocket) return;
+    updateSelectors();
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
@@ -169,6 +182,15 @@ function saveSettings() {
             settings[input.id] = input.value;
         }
     });
+    settings.targetDevice = normalizeBackend(settings.targetDevice || 'all');
+    const deviceSelect = document.getElementById('deviceId');
+    const targetSelect = document.getElementById('targetId');
+    if (deviceSelect) {
+        settings.deviceId = deviceSelect.value || '';
+    }
+    if (targetSelect) {
+        settings.targetId = targetSelect.value || '';
+    }
 
     websocket.send(JSON.stringify({
         event: 'setSettings',
@@ -238,26 +260,38 @@ function refreshCatalog() {
     requestCatalog();
 }
 
+function normalizeBackend(value) {
+    if (value === 'lacoustics') return 'la_http';
+    if (value === 'lake' || value === 'la_http' || value === 'all') return value;
+    return 'all';
+}
+
 function updateSelectors(selectedDeviceId, selectedTargetId) {
+    const targetDeviceSelect = document.getElementById('targetDevice');
     const deviceSelect = document.getElementById('deviceId');
     const targetSelect = document.getElementById('targetId');
     const noDevices = document.getElementById('noDevices');
-    if (!deviceSelect || !targetSelect) return;
+    if (!targetDeviceSelect || !deviceSelect || !targetSelect) return;
     const action = actionInfo.action || '';
     if (action.includes('smaart')) return;
 
+    const selectedBackend = normalizeBackend(targetDeviceSelect.value || 'all');
+    targetDeviceSelect.value = selectedBackend;
     const devices = catalog.devices || [];
     const targets = catalog.targets || [];
+    const filteredDevices = selectedBackend === 'all'
+        ? devices
+        : devices.filter((device) => device.backend === selectedBackend);
 
     deviceSelect.innerHTML = '';
-    devices.forEach((device) => {
+    filteredDevices.forEach((device) => {
         const option = document.createElement('option');
         option.value = device.id;
         option.textContent = device.name;
         deviceSelect.appendChild(option);
     });
 
-    if (devices.length === 0) {
+    if (filteredDevices.length === 0) {
         if (noDevices) noDevices.style.display = 'flex';
         targetSelect.innerHTML = '';
         return;
@@ -265,7 +299,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     if (noDevices) noDevices.style.display = 'none';
 
-    const activeDevice = selectedDeviceId || deviceSelect.value || devices[0].id;
+    const activeDevice = selectedDeviceId || deviceSelect.value || filteredDevices[0].id;
     deviceSelect.value = activeDevice;
 
     const filteredTargets = targets.filter((target) => {
@@ -288,6 +322,9 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     if (selectedTargetId) {
         targetSelect.value = selectedTargetId;
+    }
+    if (!targetSelect.value && targetSelect.options.length > 0) {
+        targetSelect.value = targetSelect.options[0].value;
     }
 }
 
