@@ -34,7 +34,7 @@ for (let i = 0; i < args.length; i++) {
 
 const sdClient = new SDClient(port, uuid, registerEvent);
 const defaultSettings = {
-    lakeHost: '192.168.0.10',
+    lakeHost: '',
     lakePort: 1024,
     laDiscoverySubnet: '192.168.0.0/24',
     laDiscoveryHosts: '',

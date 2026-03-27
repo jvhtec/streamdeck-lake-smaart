@@ -7,39 +7,44 @@
 
 const COMMON_STYLES = `body{font-family:Arial,sans-serif;color:#ddd;background:#2d2d2d;margin:0;padding:10px}.sdpi-wrapper{display:flex;flex-direction:column;gap:8px}.sdpi-heading{font-size:12px;font-weight:700;text-transform:uppercase;color:#9aa0a6;margin-top:8px}.sdpi-item{display:flex;align-items:center;gap:8px}.sdpi-item-label{width:140px;font-size:12px;color:#cfcfcf}.sdpi-item-value{flex:1;min-height:28px;background:#3a3a3a;border:1px solid #555;color:#fff;border-radius:4px;padding:4px 6px}.sdpi-item-message{font-size:12px;color:#cfcfcf}button.sdpi-item-value{cursor:pointer}.fallback-banner{background:#3a3a3a;border:1px solid #555;border-radius:4px;padding:8px;margin-bottom:8px;font-size:11px;color:#aaa}`;
 
-const COMMON_GLOBAL_FIELDS = `
-        <div class="sdpi-heading">Global Discovery Settings</div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Lake Host</div>
-            <input class="sdpi-item-value" type="text" id="lakeHost" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Lake Port</div>
-            <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">L-Acoustics Subnet</div>
-            <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.0.0/24" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">L-Acoustics Hosts</div>
-            <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.0.20,192.168.0.21" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">HTTP User</div>
-            <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">HTTP Pass</div>
-            <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Smaart Host</div>
-            <input class="sdpi-item-value" type="text" id="smaartHost" onchange="saveGlobalSettings()">
-        </div>
-        <div class="sdpi-item">
-            <div class="sdpi-item-label">Smaart Port</div>
-            <input class="sdpi-item-value" type="number" id="smaartPort" onchange="saveGlobalSettings()">
+const LAKE_GLOBAL_FIELDS = `
+        <div id="lakeGlobalSettings">
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Lake Host</div>
+                <input class="sdpi-item-value" type="text" id="lakeHost" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Lake Port</div>
+                <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">L-Acoustics Subnet</div>
+                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.0.0/24" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">L-Acoustics Hosts</div>
+                <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.0.20,192.168.0.21" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">HTTP User</div>
+                <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">HTTP Pass</div>
+                <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
+            </div>
+        </div>`;
+
+const SMAART_GLOBAL_FIELDS = `
+        <div id="smaartGlobalSettings" style="display:none;">
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Smaart Host</div>
+                <input class="sdpi-item-value" type="text" id="smaartHost" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Smaart Port</div>
+                <input class="sdpi-item-value" type="number" id="smaartPort" onchange="saveGlobalSettings()">
+            </div>
         </div>`;
 
 function buildScript(extraInit: string): string {
@@ -50,6 +55,7 @@ let context = '';
 let catalog = { devices: [], targets: [] };
 let pendingDeviceId = null;
 let pendingTargetId = null;
+let lastGlobalSettings = {};
 
 (function init() {
     const params = new URLSearchParams(window.location.search);
@@ -112,6 +118,7 @@ function loadSettings(settings) {
 }
 
 function loadGlobalSettings(settings) {
+    lastGlobalSettings = Object.assign({}, settings);
     var fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
     fields.forEach(function(field) {
         var el = document.getElementById(field);
@@ -144,16 +151,14 @@ function saveSettings() {
 
 function saveGlobalSettings() {
     if (!websocket) return;
-    var payload = {
-        lakeHost: (document.getElementById('lakeHost') || {}).value || '',
-        lakePort: (document.getElementById('lakePort') || {}).value || '',
-        laDiscoverySubnet: (document.getElementById('laDiscoverySubnet') || {}).value || '',
-        laDiscoveryHosts: (document.getElementById('laDiscoveryHosts') || {}).value || '',
-        laAuthUser: (document.getElementById('laAuthUser') || {}).value || '',
-        laAuthPass: (document.getElementById('laAuthPass') || {}).value || '',
-        smaartHost: (document.getElementById('smaartHost') || {}).value || '',
-        smaartPort: (document.getElementById('smaartPort') || {}).value || ''
-    };
+    var payload = Object.assign({}, lastGlobalSettings);
+    var fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    fields.forEach(function(field) {
+        var el = document.getElementById(field);
+        if (el) {
+            payload[field] = el.value || ''; 
+        }
+    });
     websocket.send(JSON.stringify({
         type: 'setGlobalSettings',
         settings: payload
@@ -263,7 +268,9 @@ export const KEY_HTML = `<!DOCTYPE html>
             <div class="sdpi-item-label">Double Press</div>
             <input class="sdpi-item-value" type="checkbox" id="requireDoublePress" onchange="saveSettings()">
         </div>
-${COMMON_GLOBAL_FIELDS}
+        <div class="sdpi-heading">Global Discovery Settings</div>
+${LAKE_GLOBAL_FIELDS}
+${SMAART_GLOBAL_FIELDS}
     </div>
     <script>
 function updateUI() {
@@ -271,6 +278,9 @@ function updateUI() {
     var presetOptions = document.getElementById('presetOptions');
     var targetControls = document.getElementById('targetControls');
     var smaartControls = document.getElementById('smaartControls');
+    var lakeGlobalSettings = document.getElementById('lakeGlobalSettings');
+    var smaartGlobalSettings = document.getElementById('smaartGlobalSettings');
+    var isSmaart = action.includes('smaart');
 
     if (muteOptions) {
         muteOptions.style.display = action.includes('mute') ? 'flex' : 'none';
@@ -279,10 +289,11 @@ function updateUI() {
         presetOptions.style.display = action.includes('preset') ? 'flex' : 'none';
     }
     if (targetControls && smaartControls) {
-        var isSmaart = action.includes('smaart');
         targetControls.style.display = isSmaart ? 'none' : 'block';
         smaartControls.style.display = isSmaart ? 'block' : 'none';
     }
+    if (lakeGlobalSettings) lakeGlobalSettings.style.display = isSmaart ? 'none' : 'block';
+    if (smaartGlobalSettings) smaartGlobalSettings.style.display = isSmaart ? 'block' : 'none';
 }
 ${buildScript('updateUI();')}
     </script>
@@ -335,7 +346,8 @@ export const DIAL_HTML = `<!DOCTYPE html>
             <div class="sdpi-item-label">Max</div>
             <input class="sdpi-item-value" type="number" id="maxLevel" onchange="saveSettings()">
         </div>
-${COMMON_GLOBAL_FIELDS}
+        <div class="sdpi-heading">Global Discovery Settings</div>
+${LAKE_GLOBAL_FIELDS}
     </div>
     <script>
 ${buildScript('')}
