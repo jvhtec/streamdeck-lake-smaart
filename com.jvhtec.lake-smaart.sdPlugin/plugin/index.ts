@@ -12,6 +12,7 @@ import { KeySmaartGenAction } from './actions/keySmaartGen';
 import { KeySmaartCaptureAction } from './actions/keySmaartCapture';
 import { KeySmaartComputeDelayAction } from './actions/keySmaartComputeDelay';
 import { KeySmaartTraceToggleAction } from './actions/keySmaartTraceToggle';
+import { PiServer } from './piServer';
 
 const args = process.argv.slice(2);
 let port = '0';
@@ -65,7 +66,60 @@ router.registerAction('com.jvhtec.lake-smaart.smaartcapture', new KeySmaartCaptu
 router.registerAction('com.jvhtec.lake-smaart.smaartdelay', new KeySmaartComputeDelayAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaarttrace', new KeySmaartTraceToggleAction(sdClient, smaartClient));
 
+// Fallback PI server for paths with URL-breaking characters (e.g. '#')
+const pluginPath = __dirname;
+const hasUnsafePathChars = /[#?]/.test(pluginPath);
+let piServer: PiServer | null = null;
+let piServerPort = 0;
+let piServerHost = '127.0.0.1';
+let piServerToken = '';
+let piServerReady: Promise<void> | null = null;
+
+if (hasUnsafePathChars) {
+    piServer = new PiServer({
+        onGetSettings: (context) => sdClient.getSettings(context),
+        onSetSettings: (context, settings) => sdClient.setSettings(context, settings),
+        onGetGlobalSettings: () => sdClient.getGlobalSettings(),
+        onSetGlobalSettings: (settings) => sdClient.setGlobalSettings(settings),
+        onGetCatalog: (respond) => {
+            deviceManager.refreshCatalog().then(() => {
+                respond(deviceManager.getDevices(), deviceManager.getTargets());
+            }).catch(() => {
+                respond(deviceManager.getDevices(), deviceManager.getTargets());
+            });
+        },
+    });
+    piServerReady = piServer.start().then((assignedPort) => {
+        piServerPort = assignedPort;
+        piServerHost = piServer!.getBoundAddress();
+        piServerToken = piServer!.getSessionToken();
+        console.log(`[PI Fallback] Plugin path contains special characters.`);
+        console.log(`[PI Fallback] Web-based inspector available at http://${piServerHost}:${piServerPort}/`);
+    }).catch((err) => {
+        console.error('[PI Fallback] Failed to start fallback server:', err);
+    });
+}
+
 sdClient.onEvents((event) => {
+    // Forward settings to fallback PI clients
+    if (piServer && event.event === 'didReceiveSettings') {
+        piServer.sendSettings(event.context, event.payload.settings);
+    }
+    if (piServer && event.event === 'didReceiveGlobalSettings') {
+        piServer.sendGlobalSettings(event.payload.settings);
+    }
+    // Auto-open browser PI when the embedded PI can't load
+    if (piServerReady && event.event === 'propertyInspectorDidAppear') {
+        const piEvent = event;
+        piServerReady.then(() => {
+            if (!piServerPort) return;
+            const isDialAction = piEvent.action === 'com.jvhtec.lake-smaart.level';
+            const page = isDialAction ? 'dial' : 'key';
+            const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(piEvent.action)}&context=${encodeURIComponent(piEvent.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
+            sdClient.openUrl(url);
+        });
+    }
+
     if (event.event === 'didReceiveGlobalSettings') {
         const settings = event.payload.settings;
         lakeBackend.updateSettings({
