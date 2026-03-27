@@ -73,6 +73,7 @@ let piServer: PiServer | null = null;
 let piServerPort = 0;
 let piServerHost = '127.0.0.1';
 let piServerToken = '';
+let piServerReady: Promise<void> | null = null;
 
 if (hasUnsafePathChars) {
     piServer = new PiServer({
@@ -88,7 +89,7 @@ if (hasUnsafePathChars) {
             });
         },
     });
-    piServer.start().then((assignedPort) => {
+    piServerReady = piServer.start().then((assignedPort) => {
         piServerPort = assignedPort;
         piServerHost = piServer!.getBoundAddress();
         piServerToken = piServer!.getSessionToken();
@@ -108,11 +109,15 @@ sdClient.onEvents((event) => {
         piServer.sendGlobalSettings(event.payload.settings);
     }
     // Auto-open browser PI when the embedded PI can't load
-    if (piServer && piServerPort && event.event === 'propertyInspectorDidAppear') {
-        const isDialAction = event.action === 'com.jvhtec.lake-smaart.level';
-        const page = isDialAction ? 'dial' : 'key';
-        const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(event.action)}&context=${encodeURIComponent(event.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
-        sdClient.openUrl(url);
+    if (piServerReady && event.event === 'propertyInspectorDidAppear') {
+        const piEvent = event;
+        piServerReady.then(() => {
+            if (!piServerPort) return;
+            const isDialAction = piEvent.action === 'com.jvhtec.lake-smaart.level';
+            const page = isDialAction ? 'dial' : 'key';
+            const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(piEvent.action)}&context=${encodeURIComponent(piEvent.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
+            sdClient.openUrl(url);
+        });
     }
 
     if (event.event === 'didReceiveGlobalSettings') {

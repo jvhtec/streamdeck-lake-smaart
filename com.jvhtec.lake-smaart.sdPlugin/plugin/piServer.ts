@@ -8,6 +8,7 @@ interface PiClient {
     action: string;
     context: string;
     authenticated: boolean;
+    authTimer: ReturnType<typeof setTimeout> | null;
 }
 
 export interface PiServerCallbacks {
@@ -122,8 +123,16 @@ export class PiServer {
     }
 
     private handleWsConnection(ws: WebSocket) {
-        const client: PiClient = { ws, action: '', context: '', authenticated: false };
+        const client: PiClient = { ws, action: '', context: '', authenticated: false, authTimer: null };
         this.clients.add(client);
+
+        // Close unauthenticated connections after 5 seconds
+        client.authTimer = setTimeout(() => {
+            if (!client.authenticated) {
+                client.ws.close(4408, 'Authentication timeout');
+                this.clients.delete(client);
+            }
+        }, 5000);
 
         ws.on('message', (data) => {
             try {
@@ -135,6 +144,7 @@ export class PiServer {
         });
 
         ws.on('close', () => {
+            if (client.authTimer) clearTimeout(client.authTimer);
             this.clients.delete(client);
         });
     }
@@ -148,6 +158,10 @@ export class PiServer {
                 return;
             }
             client.authenticated = true;
+            if (client.authTimer) {
+                clearTimeout(client.authTimer);
+                client.authTimer = null;
+            }
             client.action = msg.action || '';
             client.context = msg.context || '';
             this.callbacks.onGetSettings(client.context);
@@ -162,8 +176,8 @@ export class PiServer {
 
         switch (msg.type) {
             case 'setSettings':
-                if (msg.context && msg.settings) {
-                    this.callbacks.onSetSettings(msg.context, msg.settings);
+                if (msg.settings) {
+                    this.callbacks.onSetSettings(client.context, msg.settings);
                 }
                 break;
             case 'setGlobalSettings':
