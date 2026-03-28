@@ -2,7 +2,7 @@
     "UUID": "com.jvhtec.lake-smaart",
     "Actions": [
         {
-            "Icon": "images/icon_lake_dial",
+            "Icon": "images/icon_lake_dial_new_1774708004703",
             "Name": "Lake Level + Press-to-Mute",
             "UUID": "com.jvhtec.lake-smaart.lakeLevel",
             "PropertyInspectorPath": "ui/dial.html",
@@ -14,14 +14,14 @@
             },
             "States": [
                 {
-                    "Image": "images/icon_lake_dial",
+                    "Image": "images/icon_lake_dial_new_1774708004703",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
             ]
         },
         {
-            "Icon": "images/icon_la_dial",
+            "Icon": "images/icon_la_dial_new_1774708020000",
             "Name": "L-Acoustics Level + Press-to-Mute",
             "UUID": "com.jvhtec.lake-smaart.laLevel",
             "PropertyInspectorPath": "ui/dial.html",
@@ -33,14 +33,14 @@
             },
             "States": [
                 {
-                    "Image": "images/icon_la_dial",
+                    "Image": "images/icon_la_dial_new_1774708020000",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
             ]
         },
         {
-            "Icon": "images/icon_lake_preset",
+            "Icon": "images/icon_lake_preset_new_1774708064703",
             "Name": "Lake Preset Recall",
             "UUID": "com.jvhtec.lake-smaart.lakePresetRecall",
             "PropertyInspectorPath": "ui/key.html",
@@ -49,14 +49,14 @@
             ],
             "States": [
                 {
-                    "Image": "images/icon_lake_preset",
+                    "Image": "images/icon_lake_preset_new_1774708064703",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
             ]
         },
         {
-            "Icon": "images/icon_la_preset",
+            "Icon": "images/icon_la_preset_new_1774708117571",
             "Name": "L-Acoustics Preset Recall",
             "UUID": "com.jvhtec.lake-smaart.laPresetRecall",
             "PropertyInspectorPath": "ui/key.html",
@@ -65,14 +65,14 @@
             ],
             "States": [
                 {
-                    "Image": "images/icon_la_preset",
+                    "Image": "images/icon_la_preset_new_1774708117571",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
             ]
         },
         {
-            "Icon": "images/icon_lake_mute",
+            "Icon": "images/icon_lake_mute_new_1774708444270",
             "Name": "Lake Mute",
             "UUID": "com.jvhtec.lake-smaart.lakeMute",
             "PropertyInspectorPath": "ui/key.html",
@@ -81,14 +81,14 @@
             ],
             "States": [
                 {
-                    "Image": "images/icon_lake_mute",
+                    "Image": "images/icon_lake_mute_new_1774708444270",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
             ]
         },
         {
-            "Icon": "images/icon_la_mute",
+            "Icon": "images/icon_la_mute_new_1774708498859",
             "Name": "L-Acoustics Mute",
             "UUID": "com.jvhtec.lake-smaart.laMute",
             "PropertyInspectorPath": "ui/key.html",
@@ -97,7 +97,7 @@
             ],
             "States": [
                 {
-                    "Image": "images/icon_la_mute",
+                    "Image": "images/icon_la_mute_new_1774708498859",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
