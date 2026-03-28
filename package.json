@@ -4,6 +4,11 @@
   "description": "Stream Deck plugin for Lake LM and Smaart",
   "scripts": {
     "build": "tsc",
+    "la:mock": "node scripts/mock-la-http.js",
+    "la:smoke": "npm run build && node scripts/la-smoke.js",
+    "test:la": "npm run build && node --test tests/la/**/*.test.js",
+    "lake:mock": "node scripts/mock-lake-dlm.js",
+    "lake:selftest": "node scripts/lake-selftest.js",
     "postbuild": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/copy-runtime-deps.ps1",
     "watch": "tsc -w"
   },

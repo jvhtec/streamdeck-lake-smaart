@@ -101,6 +101,17 @@ export class SDClient {
         });
     }
 
+    public setImage(context: string, image: string) {
+        this.send({
+            event: 'setImage',
+            context,
+            payload: {
+                image,
+                target: 0,
+            },
+        });
+    }
+
     public setState(context: string, state: number) {
         this.send({
             event: 'setState',

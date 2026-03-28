@@ -17,6 +17,7 @@ export interface PiServerCallbacks {
     onGetGlobalSettings: () => void;
     onSetGlobalSettings: (settings: any) => void;
     onGetCatalog: (respond: (devices: any[], targets: any[]) => void) => void;
+    onGetSmaartSplCatalog: (respond: (inputs: any[], metrics: string[], error?: string) => void) => void;
 }
 
 export class PiServer {
@@ -92,6 +93,14 @@ export class PiServer {
         for (const client of this.clients) {
             if (client.authenticated && client.ws.readyState === WebSocket.OPEN) {
                 client.ws.send(JSON.stringify({ type: 'catalog', devices, targets }));
+            }
+        }
+    }
+
+    public sendSmaartSplCatalog(inputs: any[], metrics: string[], error?: string) {
+        for (const client of this.clients) {
+            if (client.authenticated && client.ws.readyState === WebSocket.OPEN) {
+                client.ws.send(JSON.stringify({ type: 'smaartSplCatalog', inputs, metrics, error }));
             }
         }
     }
@@ -189,6 +198,13 @@ export class PiServer {
                 this.callbacks.onGetCatalog((devices, targets) => {
                     if (client.ws.readyState === WebSocket.OPEN) {
                         client.ws.send(JSON.stringify({ type: 'catalog', devices, targets }));
+                    }
+                });
+                break;
+            case 'getSmaartSplCatalog':
+                this.callbacks.onGetSmaartSplCatalog((inputs, metrics, error) => {
+                    if (client.ws.readyState === WebSocket.OPEN) {
+                        client.ws.send(JSON.stringify({ type: 'smaartSplCatalog', inputs, metrics, error }));
                     }
                 });
                 break;

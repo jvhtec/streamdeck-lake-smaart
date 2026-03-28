@@ -2,6 +2,7 @@
 
 - [User manual](USER_MANUAL.md)
 - [L-Acoustics HTTP API notes](lacoustics-http-api.md)
+- [L-Acoustics testing guide](lacoustics-testing.md)
 - [Stream Deck+ multi-device specification](streamdeck-multi-device-spec.md)
 - [Stream Deck SDK reference](streamdeck-api.md)
 - [Lake Controller reference](lake-controller-api.md)

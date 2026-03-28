@@ -12,6 +12,7 @@ import { KeySmaartGenAction } from './actions/keySmaartGen';
 import { KeySmaartCaptureAction } from './actions/keySmaartCapture';
 import { KeySmaartComputeDelayAction } from './actions/keySmaartComputeDelay';
 import { KeySmaartTraceToggleAction } from './actions/keySmaartTraceToggle';
+import { KeySmaartSplMeterAction } from './actions/keySmaartSplMeter';
 import { SmaartGeneratorGainDialAction } from './actions/smaartGeneratorGainDialAction';
 import { PiServer } from './piServer';
 
@@ -34,36 +35,84 @@ for (let i = 0; i < args.length; i++) {
 }
 
 const sdClient = new SDClient(port, uuid, registerEvent);
+const logPluginMessage = (message: string) => {
+    console.log(message);
+    sdClient.logMessage(message);
+};
 const defaultSettings = {
     lakeHost: '',
-    lakePort: 1024,
-    laDiscoverySubnet: '192.168.0.0/24',
+    lakePort: 6016,
+    lakeBindAddress: '',
+    lakeDebug: false,
+    laDiscoverySubnet: '192.168.1.0/24',
     laDiscoveryHosts: '',
     laAuthUser: '',
     laAuthPass: '',
+    laDebugLogging: false,
     smaartHost: '127.0.0.1',
     smaartPort: 26000,
 };
 
-const dlmClient = new DlmClient(defaultSettings.lakeHost, defaultSettings.lakePort);
-const lakeBackend = new LakeBackend(dlmClient, { host: defaultSettings.lakeHost, port: defaultSettings.lakePort });
+const dlmClient = new DlmClient({
+    host: defaultSettings.lakeHost,
+    port: defaultSettings.lakePort,
+    bindAddress: defaultSettings.lakeBindAddress,
+    debug: defaultSettings.lakeDebug,
+});
+const lakeBackend = new LakeBackend(dlmClient, {
+    host: defaultSettings.lakeHost,
+    port: defaultSettings.lakePort,
+    bindAddress: defaultSettings.lakeBindAddress,
+    debug: defaultSettings.lakeDebug,
+});
 const laHttpBackend = new LaHttpBackend({
     discoverySubnet: defaultSettings.laDiscoverySubnet,
     discoveryHosts: [],
     username: defaultSettings.laAuthUser || undefined,
     password: defaultSettings.laAuthPass || undefined,
-});
+    debugLogging: defaultSettings.laDebugLogging,
+}, (message) => logPluginMessage(message));
 const smaartClient = new SmaartClient(defaultSettings.smaartHost, defaultSettings.smaartPort);
 
 const deviceManager = new DeviceManager([lakeBackend, laHttpBackend]);
+deviceManager.on('log', (message: string) => {
+    logPluginMessage(`[DeviceManager] ${message}`);
+});
+dlmClient.on('log', (message: string) => {
+    logPluginMessage(message);
+});
 
 const router = new Router(sdClient);
+
+function mapSmaartSplCatalog(response: any) {
+    const inputs = Array.isArray(response?.devices)
+        ? response.devices.flatMap((device: any) =>
+            Array.isArray(device?.activeCalibratedChannels)
+                ? device.activeCalibratedChannels
+                    .filter((channel: any) => typeof channel?.streamEndpoint === 'string')
+                    .map((channel: any) => ({
+                        deviceName: device.deviceName || 'Unknown Device',
+                        channelName: channel.channelName || 'Unknown Channel',
+                        streamEndpoint: channel.streamEndpoint,
+                        label: `${device.deviceName || 'Unknown Device'} : ${channel.channelName || 'Unknown Channel'}`,
+                    }))
+                : []
+        )
+        : [];
+
+    const metrics = Array.isArray(response?.metrics)
+        ? response.metrics.filter((metric: any) => typeof metric === 'string' && metric !== 'FS Peak')
+        : [];
+
+    return { inputs, metrics };
+}
 
 router.registerAction('com.jvhtec.lake-smaart.level', new LevelEncoderAction(sdClient, deviceManager));
 router.registerAction('com.jvhtec.lake-smaart.mute', new MuteAction(sdClient, deviceManager));
 router.registerAction('com.jvhtec.lake-smaart.presetRecall', new PresetRecallAction(sdClient, deviceManager));
 router.registerAction('com.jvhtec.lake-smaart.smaartgengain', new SmaartGeneratorGainDialAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartgen', new KeySmaartGenAction(sdClient, smaartClient));
+router.registerAction('com.jvhtec.lake-smaart.smaartspl', new KeySmaartSplMeterAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartcapture', new KeySmaartCaptureAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartdelay', new KeySmaartComputeDelayAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaarttrace', new KeySmaartTraceToggleAction(sdClient, smaartClient));
@@ -89,6 +138,11 @@ if (hasUnsafePathChars) {
             }).catch(() => {
                 respond(deviceManager.getDevices(), deviceManager.getTargets());
             });
+        },
+        onGetSmaartSplCatalog: async (respond) => {
+            const result = await smaartClient.getActiveCalibratedInputs();
+            const { inputs, metrics } = mapSmaartSplCatalog(result.response);
+            respond(inputs, metrics, result.ok ? undefined : result.error);
         },
     });
     piServerReady = piServer.start().then((assignedPort) => {
@@ -125,10 +179,27 @@ sdClient.onEvents((event) => {
     }
 
     if (event.event === 'didReceiveGlobalSettings') {
-        const settings = event.payload.settings;
+        const settings = event.payload.settings || {};
+        const configuredLakePort = Number(settings.lakePort);
+        const usesLegacyLakePort = !configuredLakePort || configuredLakePort === 1024;
+        const resolvedLakePort = usesLegacyLakePort ? defaultSettings.lakePort : configuredLakePort;
+        const resolvedLakeDebug =
+            settings.lakeDebug === true ||
+            settings.lakeDebug === 'true' ||
+            settings.lakeDebug === '1';
+
+        if (usesLegacyLakePort) {
+            sdClient.setGlobalSettings({
+                ...settings,
+                lakePort: resolvedLakePort,
+            });
+        }
+
         lakeBackend.updateSettings({
             host: settings.lakeHost || defaultSettings.lakeHost,
-            port: Number(settings.lakePort) || defaultSettings.lakePort,
+            port: resolvedLakePort,
+            bindAddress: settings.lakeBindAddress || defaultSettings.lakeBindAddress,
+            debug: resolvedLakeDebug,
         });
         laHttpBackend.updateSettings({
             discoverySubnet: settings.laDiscoverySubnet || defaultSettings.laDiscoverySubnet,
@@ -138,6 +209,10 @@ sdClient.onEvents((event) => {
                 .filter(Boolean),
             username: settings.laAuthUser || undefined,
             password: settings.laAuthPass || undefined,
+            debugLogging:
+                settings.laDebugLogging === true ||
+                settings.laDebugLogging === 'true' ||
+                settings.laDebugLogging === '1',
         });
         smaartClient.setTarget(
             settings.smaartHost || defaultSettings.smaartHost,
@@ -153,6 +228,18 @@ sdClient.onEvents((event) => {
                 sdClient.sendToPropertyInspector(event.context, {
                     devices: deviceManager.getDevices(),
                     targets: deviceManager.getTargets(),
+                });
+            });
+            return;
+        }
+
+        if (request === 'smaartSplCatalog') {
+            smaartClient.getActiveCalibratedInputs().then((result) => {
+                const { inputs, metrics } = mapSmaartSplCatalog(result.response);
+                sdClient.sendToPropertyInspector(event.context, {
+                    smaartSplInputs: inputs,
+                    smaartSplMetrics: metrics,
+                    smaartSplError: result.ok ? undefined : result.error,
                 });
             });
         }

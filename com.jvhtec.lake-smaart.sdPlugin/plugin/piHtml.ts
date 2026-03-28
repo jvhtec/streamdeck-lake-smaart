@@ -10,20 +10,28 @@ const COMMON_STYLES = `body{font-family:Arial,sans-serif;color:#ddd;background:#
 const LAKE_GLOBAL_FIELDS = `
         <div id="lakeGlobalSettings">
             <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Host</div>
-                <input class="sdpi-item-value" type="text" id="lakeHost" onchange="saveGlobalSettings()">
+                <div class="sdpi-item-label">Lake Device Filter</div>
+                <input class="sdpi-item-value" type="text" id="lakeHost" placeholder="Optional device IP or frame ID" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Lake Port</div>
                 <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
+                <div class="sdpi-item-label">Lake Adapter IP</div>
+                <input class="sdpi-item-value" type="text" id="lakeBindAddress" placeholder="Local adapter IP on Lake network" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Lake Debug Log</div>
+                <input class="sdpi-item-value" type="checkbox" id="lakeDebug" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
                 <div class="sdpi-item-label">L-Acoustics Subnet</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.0.0/24" onchange="saveGlobalSettings()">
+                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.1.0/24" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">L-Acoustics Hosts</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.0.20,192.168.0.21" onchange="saveGlobalSettings()">
+                <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.1.20,192.168.1.21" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">HTTP User</div>
@@ -32,6 +40,10 @@ const LAKE_GLOBAL_FIELDS = `
             <div class="sdpi-item">
                 <div class="sdpi-item-label">HTTP Pass</div>
                 <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">LA Debug Log</div>
+                <input class="sdpi-item-value" type="checkbox" id="laDebugLogging" onchange="saveGlobalSettings()">
             </div>
         </div>`;
 
@@ -56,6 +68,9 @@ let catalog = { devices: [], targets: [] };
 let pendingDeviceId = null;
 let pendingTargetId = null;
 let lastGlobalSettings = {};
+let lastSettings = {};
+let smaartSplCatalog = { inputs: [], metrics: [], error: '' };
+let smaartSplRequestSeq = 0;
 
 function getActionName() {
     var parts = action.split('.');
@@ -68,6 +83,10 @@ function isSmaartAction() {
 
 function isSmaartGeneratorGainAction() {
     return getActionName() === 'smaartgengain';
+}
+
+function isSmaartSplAction() {
+    return getActionName() === 'smaartspl';
 }
 
 function isMuteAction() {
@@ -95,6 +114,9 @@ function isPresetAction() {
             token: token
         }));
         websocket.send(JSON.stringify({ type: 'getCatalog' }));
+        if (isSmaartSplAction()) {
+            websocket.send(JSON.stringify({ type: 'getSmaartSplCatalog' }));
+        }
     };
 
     websocket.onmessage = function (evt) {
@@ -113,13 +135,21 @@ function isPresetAction() {
             pendingTargetId = null;
             updateSelectors(devId, tgtId);
         }
+        if (msg.type === 'smaartSplCatalog') {
+            applySmaartSplCatalog({
+                inputs: msg.inputs || [],
+                metrics: msg.metrics || [],
+                error: msg.error || ''
+            });
+        }
     };
 
     ${extraInit}
 })();
 
 function loadSettings(settings) {
-    const globalFields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    lastSettings = Object.assign({}, settings);
+    const globalFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(function(input) {
         if (!input.id || globalFields.includes(input.id)) return;
@@ -135,24 +165,32 @@ function loadSettings(settings) {
         pendingDeviceId = settings.deviceId || null;
         pendingTargetId = settings.targetId || null;
     }
+    updateSmaartSplSelectors(settings.splStreamEndpoint, settings.splMetric);
     if (typeof updateUI === 'function') updateUI();
 }
 
 function loadGlobalSettings(settings) {
     lastGlobalSettings = Object.assign({}, settings);
-    var fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    var fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach(function(field) {
         var el = document.getElementById(field);
         if (el && settings[field] !== undefined) {
-            el.value = settings[field];
+            if (el.type === 'checkbox') {
+                el.checked = settings[field] === true || settings[field] === 'true' || settings[field] === '1';
+            } else {
+                el.value = settings[field];
+            }
         }
     });
+    if (isSmaartSplAction()) {
+        requestSmaartSplCatalog();
+    }
     if (typeof updateUI === 'function') updateUI();
 }
 
 function saveSettings() {
     if (!websocket) return;
-    var globalFields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    var globalFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     var settings = {};
     var inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(function(input) {
@@ -168,23 +206,28 @@ function saveSettings() {
         context: context,
         settings: settings
     }));
+    lastSettings = Object.assign({}, settings);
     updateSelectors(settings.deviceId, settings.targetId);
+    updateSmaartSplSelectors(settings.splStreamEndpoint, settings.splMetric);
 }
 
 function saveGlobalSettings() {
     if (!websocket) return;
     var payload = Object.assign({}, lastGlobalSettings);
-    var fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    var fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach(function(field) {
         var el = document.getElementById(field);
         if (el) {
-            payload[field] = el.value || ''; 
+            payload[field] = el.type === 'checkbox' ? el.checked : (el.value || '');
         }
     });
     websocket.send(JSON.stringify({
         type: 'setGlobalSettings',
         settings: payload
     }));
+    if (isSmaartSplAction()) {
+        setTimeout(requestSmaartSplCatalog, 0);
+    }
 }
 
 function requestCatalog() {
@@ -194,6 +237,155 @@ function requestCatalog() {
 
 function refreshCatalog() {
     requestCatalog();
+}
+
+function requestSmaartSplCatalog() {
+    var hostField = document.getElementById('smaartHost');
+    var portField = document.getElementById('smaartPort');
+    var host = (hostField && hostField.value) || lastGlobalSettings.smaartHost || '127.0.0.1';
+    var port = Number((portField && portField.value) || lastGlobalSettings.smaartPort || 26000) || 26000;
+    var requestSeq = ++smaartSplRequestSeq;
+
+    requestSmaartSplCatalogDirect(host, port, requestSeq);
+
+    if (!websocket) return;
+    websocket.send(JSON.stringify({ type: 'getSmaartSplCatalog' }));
+}
+
+function requestSmaartSplCatalogDirect(host, port, requestSeq) {
+    var ws = null;
+    var ready = false;
+    var finished = false;
+
+    function finish(response) {
+        if (finished || requestSeq !== smaartSplRequestSeq) {
+            if (ws) {
+                try { ws.close(); } catch (error) {}
+            }
+            return;
+        }
+
+        finished = true;
+        applySmaartSplCatalog(response);
+        if (ws) {
+            try { ws.close(); } catch (error) {}
+        }
+    }
+
+    try {
+        ws = new WebSocket('ws://' + host + ':' + port + '/api/v4/');
+    } catch (error) {
+        finish({
+            inputs: [],
+            metrics: [],
+            error: 'Unable to open Smaart WebSocket at ' + host + ':' + port + '.'
+        });
+        return;
+    }
+
+    var timeout = setTimeout(function() {
+        finish({
+            inputs: [],
+            metrics: [],
+            error: 'Timed out talking to Smaart at ' + host + ':' + port + '.'
+        });
+    }, 2500);
+
+    function finishWithTimeoutClear(response) {
+        clearTimeout(timeout);
+        finish(response);
+    }
+
+    ws.onopen = function() {
+        ws.send(JSON.stringify({ action: 'get' }));
+    };
+
+    ws.onmessage = function(evt) {
+        var parsed;
+        try {
+            parsed = JSON.parse(evt.data);
+        } catch (error) {
+            return;
+        }
+
+        var response = parsed && parsed.response;
+        if (!response) return;
+
+        if (response.authenticationRequired === true) {
+            finishWithTimeoutClear({
+                inputs: [],
+                metrics: [],
+                error: 'Smaart API authentication is enabled.'
+            });
+            return;
+        }
+
+        if (!ready && (response.authenticationRequired === false || response.applicationName)) {
+            ready = true;
+            ws.send(JSON.stringify({ action: 'get', target: 'activeCalibratedInputs' }));
+            return;
+        }
+
+        if (Array.isArray(response.devices) || Array.isArray(response.metrics)) {
+            finishWithTimeoutClear(mapSmaartSplCatalogResponse(response));
+        }
+    };
+
+    ws.onerror = function() {
+        finishWithTimeoutClear({
+            inputs: [],
+            metrics: [],
+            error: 'Unable to reach Smaart at ' + host + ':' + port + '.'
+        });
+    };
+
+    ws.onclose = function() {
+        if (!finished) {
+            finishWithTimeoutClear({
+                inputs: [],
+                metrics: [],
+                error: 'Smaart closed the connection at ' + host + ':' + port + '.'
+            });
+        }
+    };
+}
+
+function mapSmaartSplCatalogResponse(response) {
+    var inputs = Array.isArray(response && response.devices)
+        ? response.devices.flatMap(function(device) {
+            return Array.isArray(device && device.activeCalibratedChannels)
+                ? device.activeCalibratedChannels
+                    .filter(function(channel) { return typeof (channel && channel.streamEndpoint) === 'string'; })
+                    .map(function(channel) {
+                        return {
+                            deviceName: device.deviceName || 'Unknown Device',
+                            channelName: channel.channelName || 'Unknown Channel',
+                            streamEndpoint: channel.streamEndpoint,
+                            label: (device.deviceName || 'Unknown Device') + ' : ' + (channel.channelName || 'Unknown Channel')
+                        };
+                    })
+                : [];
+        })
+        : [];
+
+    var metrics = Array.isArray(response && response.metrics)
+        ? response.metrics.filter(function(metric) { return typeof metric === 'string' && metric !== 'FS Peak'; })
+        : [];
+
+    return {
+        inputs: inputs,
+        metrics: metrics,
+        error: inputs.length === 0 ? 'No active calibrated inputs found in Smaart.' : ''
+    };
+}
+
+function applySmaartSplCatalog(nextCatalog) {
+    smaartSplCatalog = {
+        inputs: nextCatalog.inputs || [],
+        metrics: nextCatalog.metrics || [],
+        error: nextCatalog.error || ''
+    };
+    updateSmaartSplSelectors(lastSettings.splStreamEndpoint, lastSettings.splMetric);
 }
 
 function onDeviceChange() {
@@ -253,6 +445,68 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     if (selectedTargetId) {
         targetSelect.value = selectedTargetId;
     }
+}
+
+function updateSmaartSplSelectors(selectedEndpoint, selectedMetric) {
+    var inputSelect = document.getElementById('splStreamEndpoint');
+    var metricSelect = document.getElementById('splMetric');
+    var emptyRow = document.getElementById('smaartSplEmpty');
+    if (!inputSelect || !metricSelect || !isSmaartSplAction()) return;
+
+    var inputs = smaartSplCatalog.inputs || [];
+    var metrics = smaartSplCatalog.metrics || [];
+
+    inputSelect.innerHTML = '';
+    inputs.forEach(function(input) {
+        var option = document.createElement('option');
+        option.value = input.streamEndpoint;
+        option.textContent = input.label || (input.deviceName + ' : ' + input.channelName);
+        inputSelect.appendChild(option);
+    });
+
+    metricSelect.innerHTML = '';
+    metrics.forEach(function(metric) {
+        var option = document.createElement('option');
+        option.value = metric;
+        option.textContent = metric;
+        metricSelect.appendChild(option);
+    });
+
+    if (selectedEndpoint) {
+        inputSelect.value = selectedEndpoint;
+    }
+    if (!inputSelect.value && inputs.length > 0) {
+        inputSelect.value = inputs[0].streamEndpoint;
+    }
+
+    if (selectedMetric) {
+        metricSelect.value = selectedMetric;
+    }
+    if (!metricSelect.value && metrics.length > 0) {
+        metricSelect.value = metrics[0];
+    }
+
+    if (emptyRow) {
+        var message = emptyRow.querySelector('.sdpi-item-value');
+        if (message) {
+            message.textContent = smaartSplCatalog.error || 'No active calibrated inputs found in Smaart.';
+        }
+        emptyRow.style.display = inputs.length === 0 ? 'flex' : 'none';
+    }
+
+    var resolvedEndpoint = inputSelect.value || '';
+    var resolvedMetric = metricSelect.value || '';
+    if (
+        resolvedEndpoint &&
+        resolvedMetric &&
+        (lastSettings.splStreamEndpoint !== resolvedEndpoint || lastSettings.splMetric !== resolvedMetric)
+    ) {
+        lastSettings = Object.assign({}, lastSettings, {
+            splStreamEndpoint: resolvedEndpoint,
+            splMetric: resolvedMetric
+        });
+        setTimeout(saveSettings, 0);
+    }
 }`;
 }
 
@@ -285,7 +539,23 @@ export const KEY_HTML = `<!DOCTYPE html>
         </div>
 
         <div id="smaartControls" style="display:none;">
-            <div class="sdpi-item-message">This action sends a command to the Smaart API.</div>
+            <div class="sdpi-item-message" id="smaartActionMessage">This action sends a command to the Smaart API.</div>
+            <div id="smaartSplOptions" style="display:none;">
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Input</div>
+                    <select class="sdpi-item-value select" id="splStreamEndpoint" onchange="saveSettings()"></select>
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Metric</div>
+                    <select class="sdpi-item-value select" id="splMetric" onchange="saveSettings()"></select>
+                </div>
+                <div class="sdpi-item" id="smaartSplEmpty" style="display:none;">
+                    <div class="sdpi-item-value">No active calibrated inputs found in Smaart.</div>
+                </div>
+                <div class="sdpi-item">
+                    <button class="sdpi-item-value" type="button" onclick="requestSmaartSplCatalog()">Refresh Smaart Inputs</button>
+                </div>
+            </div>
         </div>
 
         <div class="sdpi-heading">Action Options</div>
@@ -307,9 +577,12 @@ function updateUI() {
     var presetOptions = document.getElementById('presetOptions');
     var targetControls = document.getElementById('targetControls');
     var smaartControls = document.getElementById('smaartControls');
+    var smaartActionMessage = document.getElementById('smaartActionMessage');
+    var smaartSplOptions = document.getElementById('smaartSplOptions');
     var lakeGlobalSettings = document.getElementById('lakeGlobalSettings');
     var smaartGlobalSettings = document.getElementById('smaartGlobalSettings');
     var isSmaart = isSmaartAction();
+    var isSmaartSpl = isSmaartSplAction();
 
     if (muteOptions) {
         muteOptions.style.display = isMuteAction() ? 'flex' : 'none';
@@ -320,6 +593,14 @@ function updateUI() {
     if (targetControls && smaartControls) {
         targetControls.style.display = isSmaart ? 'none' : 'block';
         smaartControls.style.display = isSmaart ? 'block' : 'none';
+    }
+    if (smaartActionMessage) {
+        smaartActionMessage.textContent = isSmaartSpl
+            ? 'This action subscribes to live Smaart SPL data.'
+            : 'This action sends a command to the Smaart API.';
+    }
+    if (smaartSplOptions) {
+        smaartSplOptions.style.display = isSmaartSpl ? 'block' : 'none';
     }
     if (lakeGlobalSettings) {
         lakeGlobalSettings.style.display = isSmaart ? 'none' : 'block';

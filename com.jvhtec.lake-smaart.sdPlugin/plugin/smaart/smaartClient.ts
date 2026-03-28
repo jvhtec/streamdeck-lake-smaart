@@ -19,8 +19,17 @@ export interface SmaartSignalGeneratorStatus {
     type?: string;
 }
 
+export interface SmaartSplInputDescriptor {
+    deviceName: string;
+    channelName: string;
+    streamEndpoint: string;
+    logEndpointPrefix?: string;
+    alarms?: any[];
+}
+
 interface PendingRequest {
-    resolve: (result: SmaartCommandResult) => void;
+    payload: string;
+    resolve?: (result: SmaartCommandResult) => void;
     timeout: ReturnType<typeof setTimeout>;
 }
 
@@ -37,7 +46,7 @@ export class SmaartClient {
     private isConnected = false;
     private apiReady = false;
     private pendingCommands: QueuedCommand[] = [];
-    private pendingRequests: PendingRequest[] = [];
+    private activeRequest: PendingRequest | null = null;
 
     constructor(host: string, port: number) {
         this.host = host;
@@ -104,14 +113,14 @@ export class SmaartClient {
                     this.isConnected = true;
                     this.apiReady = true;
                     console.log(`[Smaart] API ready on ${this.host}:${this.port}`);
-                    this.flushPendingCommands();
+                    this.dispatchNextCommand();
                 }
 
                 if (response.error) {
                     console.error(`[Smaart] API error: ${response.error}`);
                 }
 
-                this.resolvePendingRequest(response);
+                this.resolveActiveRequest(response);
             });
 
             ws.on('close', () => {
@@ -143,14 +152,14 @@ export class SmaartClient {
 
     public send(command: object): boolean {
         const payload = JSON.stringify(command);
-        if (this.ws && this.ws.readyState === WebSocket.OPEN && this.apiReady) {
-            this.sendPayload(payload);
-            return true;
-        }
-
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
-            this.pendingCommands.push({ payload, timeoutMs: 0 });
-            console.log(`[Smaart] Queued until API ready: ${payload}`);
+            this.pendingCommands.push({ payload, timeoutMs: 1500 });
+            if (this.apiReady) {
+                console.log(`[Smaart] Queued command: ${payload}`);
+            } else {
+                console.log(`[Smaart] Queued until API ready: ${payload}`);
+            }
+            this.dispatchNextCommand();
             return true;
         }
 
@@ -187,6 +196,26 @@ export class SmaartClient {
             action: 'get',
             target: 'signalGenerator',
         });
+    }
+
+    public async getActiveCalibratedInputs(): Promise<SmaartCommandResult> {
+        return this.request({
+            action: 'get',
+            target: 'activeCalibratedInputs',
+        });
+    }
+
+    public buildStreamUrl(streamEndpoint: string): string {
+        if (/^wss?:\/\//i.test(streamEndpoint)) {
+            return streamEndpoint;
+        }
+
+        const baseUrl = `ws://${this.host}:${this.port}`;
+        if (streamEndpoint.startsWith('/')) {
+            return `${baseUrl}${streamEndpoint}`;
+        }
+
+        return `${baseUrl}/${streamEndpoint}`;
     }
 
     public async capture(): Promise<SmaartCommandResult> {
@@ -253,20 +282,36 @@ export class SmaartClient {
         });
     }
 
-    private flushPendingCommands() {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.apiReady) {
+    private dispatchNextCommand() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.apiReady || this.activeRequest) {
             return;
         }
 
-        while (this.pendingCommands.length > 0) {
-            const command = this.pendingCommands.shift();
-            if (command) {
-                if (command.resolve) {
-                    this.trackPendingRequest(command.resolve, command.timeoutMs);
-                }
-                this.sendPayload(command.payload);
-            }
+        const command = this.pendingCommands.shift();
+        if (!command) {
+            return;
         }
+
+        const activeRequest: PendingRequest = {
+            payload: command.payload,
+            resolve: command.resolve,
+            timeout: setTimeout(() => {
+                if (this.activeRequest !== activeRequest) {
+                    return;
+                }
+
+                this.activeRequest = null;
+                console.warn(`[Smaart] Timed out waiting for response: ${activeRequest.payload}`);
+                activeRequest.resolve?.({
+                    ok: false,
+                    error: 'Timed out waiting for a Smaart response.',
+                });
+                this.dispatchNextCommand();
+            }, command.timeoutMs),
+        };
+
+        this.activeRequest = activeRequest;
+        this.sendPayload(command.payload);
     }
 
     private sendPayload(payload: string) {
@@ -336,17 +381,15 @@ export class SmaartClient {
     private request(command: object, timeoutMs = 1500): Promise<SmaartCommandResult> {
         const payload = JSON.stringify(command);
 
-        if (this.ws && this.ws.readyState === WebSocket.OPEN && this.apiReady) {
-            return new Promise((resolve) => {
-                this.trackPendingRequest(resolve, timeoutMs);
-                this.sendPayload(payload);
-            });
-        }
-
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return new Promise((resolve) => {
                 this.pendingCommands.push({ payload, resolve, timeoutMs });
-                console.log(`[Smaart] Queued request until API ready: ${payload}`);
+                if (this.apiReady) {
+                    console.log(`[Smaart] Queued request: ${payload}`);
+                } else {
+                    console.log(`[Smaart] Queued request until API ready: ${payload}`);
+                }
+                this.dispatchNextCommand();
             });
         }
 
@@ -357,36 +400,20 @@ export class SmaartClient {
         });
     }
 
-    private trackPendingRequest(resolve: (result: SmaartCommandResult) => void, timeoutMs: number) {
-        const pendingRequest: PendingRequest = {
-            resolve,
-            timeout: setTimeout(() => {
-                const index = this.pendingRequests.indexOf(pendingRequest);
-                if (index >= 0) {
-                    this.pendingRequests.splice(index, 1);
-                }
-                resolve({
-                    ok: false,
-                    error: 'Timed out waiting for a Smaart response.',
-                });
-            }, timeoutMs),
-        };
-
-        this.pendingRequests.push(pendingRequest);
-    }
-
-    private resolvePendingRequest(response: any) {
-        const pendingRequest = this.pendingRequests.shift();
-        if (!pendingRequest) {
+    private resolveActiveRequest(response: any) {
+        const activeRequest = this.activeRequest;
+        if (!activeRequest) {
             return;
         }
 
-        clearTimeout(pendingRequest.timeout);
-        pendingRequest.resolve({
+        this.activeRequest = null;
+        clearTimeout(activeRequest.timeout);
+        activeRequest.resolve?.({
             ok: !response?.error,
             error: response?.error,
             response,
         });
+        this.dispatchNextCommand();
     }
 
     private clearPending(reason: string) {
@@ -400,13 +427,11 @@ export class SmaartClient {
             }
         }
 
-        while (this.pendingRequests.length > 0) {
-            const pendingRequest = this.pendingRequests.shift();
-            if (!pendingRequest) {
-                continue;
-            }
-            clearTimeout(pendingRequest.timeout);
-            pendingRequest.resolve({
+        if (this.activeRequest) {
+            const activeRequest = this.activeRequest;
+            this.activeRequest = null;
+            clearTimeout(activeRequest.timeout);
+            activeRequest.resolve?.({
                 ok: false,
                 error: reason,
             });

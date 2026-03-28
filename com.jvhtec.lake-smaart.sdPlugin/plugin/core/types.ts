@@ -1,4 +1,5 @@
 export type BackendId = 'lake' | 'la_http';
+export type LaHttpDeviceProfile = 'p1' | 'lc16d' | 'amplified' | 'unknown';
 
 export interface DeviceDescriptor {
     id: string;
@@ -22,9 +23,12 @@ export type TargetDescriptor =
           backend: 'la_http';
           deviceId: string;
           kind: 'output';
+          id: string;
           index: number;
           name: string;
           supports: Array<'mute' | 'level' | 'volume'>;
+          path: string;
+          profile: LaHttpDeviceProfile;
       }
     | {
           backend: 'la_http';
@@ -32,6 +36,7 @@ export type TargetDescriptor =
           kind: 'preset';
           index: number;
           name: string;
+          profile: LaHttpDeviceProfile;
       };
 
 export interface TargetState {

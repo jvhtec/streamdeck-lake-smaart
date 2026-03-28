@@ -2,6 +2,7 @@ let websocket = null;
 let uuid = null;
 let actionInfo = null;
 let catalog = { devices: [], targets: [] };
+let lastGlobalSettings = {};
 
 function getActionId() {
     return actionInfo?.action || '';
@@ -69,7 +70,7 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
 function loadSettings(settings) {
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -83,11 +84,16 @@ function loadSettings(settings) {
 }
 
 function loadGlobalSettings(settings) {
-    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    lastGlobalSettings = Object.assign({}, settings);
+    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el && settings[field] !== undefined) {
-            el.value = settings[field];
+            if (el.type === 'checkbox') {
+                el.checked = settings[field] === true || settings[field] === 'true' || settings[field] === '1';
+            } else {
+                el.value = settings[field];
+            }
         }
     });
 }
@@ -97,7 +103,7 @@ function saveSettings() {
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -118,16 +124,14 @@ function saveSettings() {
 
 function saveGlobalSettings() {
     if (!websocket) return;
-    const payload = {
-        lakeHost: document.getElementById('lakeHost')?.value || '',
-        lakePort: document.getElementById('lakePort')?.value || '',
-        laDiscoverySubnet: document.getElementById('laDiscoverySubnet')?.value || '',
-        laDiscoveryHosts: document.getElementById('laDiscoveryHosts')?.value || '',
-        laAuthUser: document.getElementById('laAuthUser')?.value || '',
-        laAuthPass: document.getElementById('laAuthPass')?.value || '',
-        smaartHost: document.getElementById('smaartHost')?.value || '',
-        smaartPort: document.getElementById('smaartPort')?.value || ''
-    };
+    const payload = Object.assign({}, lastGlobalSettings);
+    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+    fields.forEach((field) => {
+        const el = document.getElementById(field);
+        if (el) {
+            payload[field] = el.type === 'checkbox' ? el.checked : (el.value || '');
+        }
+    });
 
     websocket.send(JSON.stringify({
         event: 'setGlobalSettings',

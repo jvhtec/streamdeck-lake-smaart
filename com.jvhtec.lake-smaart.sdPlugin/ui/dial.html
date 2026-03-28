@@ -57,20 +57,28 @@
         <div class="sdpi-heading">Global Discovery Settings</div>
         <div id="lakeGlobalSettings">
             <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Host</div>
-                <input class="sdpi-item-value" type="text" id="lakeHost" onchange="saveGlobalSettings()">
+                <div class="sdpi-item-label">Lake Device Filter</div>
+                <input class="sdpi-item-value" type="text" id="lakeHost" placeholder="Optional device IP or frame ID" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Lake Port</div>
                 <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
+                <div class="sdpi-item-label">Lake Adapter IP</div>
+                <input class="sdpi-item-value" type="text" id="lakeBindAddress" placeholder="Local adapter IP on Lake network" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Lake Debug Log</div>
+                <input class="sdpi-item-value" type="checkbox" id="lakeDebug" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
                 <div class="sdpi-item-label">L-Acoustics Subnet</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.0.0/24" onchange="saveGlobalSettings()">
+                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.1.0/24" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">L-Acoustics Hosts</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.0.20,192.168.0.21" onchange="saveGlobalSettings()">
+                <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.1.20,192.168.1.21" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">HTTP User</div>
@@ -79,6 +87,10 @@
             <div class="sdpi-item">
                 <div class="sdpi-item-label">HTTP Pass</div>
                 <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">LA Debug Log</div>
+                <input class="sdpi-item-value" type="checkbox" id="laDebugLogging" onchange="saveGlobalSettings()">
             </div>
         </div>
         <div id="smaartGlobalSettings" style="display:none;">
@@ -163,7 +175,7 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
 function loadSettings(settings) {
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -178,11 +190,15 @@ function loadSettings(settings) {
 
 function loadGlobalSettings(settings) {
     lastGlobalSettings = Object.assign({}, settings);
-    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el && settings[field] !== undefined) {
-            el.value = settings[field];
+            if (el.type === 'checkbox') {
+                el.checked = settings[field] === true || settings[field] === 'true' || settings[field] === '1';
+            } else {
+                el.value = settings[field];
+            }
         }
     });
     updateUI();
@@ -193,7 +209,7 @@ function saveSettings() {
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -215,11 +231,11 @@ function saveSettings() {
 function saveGlobalSettings() {
     if (!websocket) return;
     const payload = Object.assign({}, lastGlobalSettings);
-    const fields = ['lakeHost', 'lakePort', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'smaartHost', 'smaartPort'];
+    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el) {
-            payload[field] = el.value || '';
+            payload[field] = el.type === 'checkbox' ? el.checked : (el.value || '');
         }
     });
 

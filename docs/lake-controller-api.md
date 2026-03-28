@@ -19,6 +19,8 @@ Lake Controller uses the DLM protocol for third-party integrations and programma
 - **Transport**: UDP/IP binary protocol
 - **Message Format**: Binary packets with headers, message ID, and padded payload
 - **Data Alignment**: Payloads must be padded to 4-byte boundaries
+- **Fixed Response Mode**: Send to device UDP port `6015` and listen locally on UDP port `6004`
+- **Dynamic Response Mode**: Send to device UDP port `6016`; replies return to the originating local UDP port
 
 ## DLM Packet Structure
 
@@ -179,7 +181,12 @@ Each request should have a unique message ID to match requests with responses. M
 
 ### 1. Establish UDP Socket
 
-Bind a local UDP socket (the plugin listens on port 6004 by default) and target the Lake Controller device on its configured IP address and port (typically port 1024 in this plugin implementation).
+Choose one DLM transport mode:
+
+- Fixed mode: bind local UDP port `6004` and send to device port `6015`
+- Dynamic mode: bind an ephemeral local UDP port and send to device port `6016`
+
+The plugin now defaults to dynamic mode so it can coexist with Lake Controller on the same computer.
 
 ### 2. Send Command
 

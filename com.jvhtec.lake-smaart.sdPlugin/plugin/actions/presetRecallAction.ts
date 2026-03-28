@@ -1,5 +1,6 @@
 import { Action } from '../core/router';
 import { DeviceManager } from '../core/deviceManager';
+import { formatError } from '../core/errorUtils';
 import { IncomingEvent, KeyDownEvent, WillAppearEvent, WillDisappearEvent } from '../sd/events';
 import { SDClient } from '../sd/sdClient';
 
@@ -71,7 +72,12 @@ export class PresetRecallAction implements Action {
             }
         }
 
-        await this.deviceManager.recallPreset(targetId);
-        this.sdClient.showOk(e.context);
+        try {
+            await this.deviceManager.recallPreset(targetId);
+            this.sdClient.showOk(e.context);
+        } catch (error) {
+            this.sdClient.showAlert(e.context);
+            this.sdClient.logMessage(`[Preset] Failed for ${targetId}: ${formatError(error)}`);
+        }
     }
 }

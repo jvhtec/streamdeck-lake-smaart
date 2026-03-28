@@ -1,5 +1,6 @@
 import { Action } from '../core/router';
 import { DeviceManager } from '../core/deviceManager';
+import { formatError } from '../core/errorUtils';
 import { IncomingEvent, DialDownEvent, DialRotateEvent, WillAppearEvent, WillDisappearEvent } from '../sd/events';
 import { SDClient } from '../sd/sdClient';
 
@@ -70,8 +71,13 @@ export class LevelEncoderAction implements Action {
         if (!Number.isNaN(max)) {
             next = Math.min(next, max);
         }
-        await this.deviceManager.setLevel(targetId, next, levelMode === 'volume' ? 'volume' : 'gain');
-        this.updateFeedback(e.context, targetId, next, levelMode === 'volume');
+        try {
+            await this.deviceManager.setLevel(targetId, next, levelMode === 'volume' ? 'volume' : 'gain');
+            this.updateFeedback(e.context, targetId, next, levelMode === 'volume');
+        } catch (error) {
+            this.sdClient.showAlert(e.context);
+            this.sdClient.logMessage(`[Level] Failed for ${targetId}: ${formatError(error)}`);
+        }
     }
 
     async onDialDown(event: IncomingEvent): Promise<void> {
@@ -81,8 +87,13 @@ export class LevelEncoderAction implements Action {
         if (!targetId) return;
         const current = this.deviceManager.getTargetState(targetId)?.mute;
         const next = current === undefined ? true : !current;
-        await this.deviceManager.setMute(targetId, next);
-        this.updateFeedback(e.context, targetId, undefined, false, next);
+        try {
+            await this.deviceManager.setMute(targetId, next);
+            this.updateFeedback(e.context, targetId, undefined, false, next);
+        } catch (error) {
+            this.sdClient.showAlert(e.context);
+            this.sdClient.logMessage(`[Level] Failed for ${targetId}: ${formatError(error)}`);
+        }
     }
 
     private updateFeedback(context: string, targetId: string, level?: number, isVolume?: boolean, muteOverride?: boolean) {

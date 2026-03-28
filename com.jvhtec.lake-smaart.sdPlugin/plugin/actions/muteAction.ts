@@ -1,5 +1,6 @@
 import { Action } from '../core/router';
 import { DeviceManager } from '../core/deviceManager';
+import { formatError } from '../core/errorUtils';
 import { IncomingEvent, KeyDownEvent, KeyUpEvent, WillAppearEvent, WillDisappearEvent } from '../sd/events';
 import { SDClient } from '../sd/sdClient';
 
@@ -56,15 +57,25 @@ export class MuteAction implements Action {
         const { targetId, momentary } = e.payload.settings;
         if (!targetId) return;
         if (momentary) {
-            await this.deviceManager.setMute(targetId, true);
-            this.sdClient.setState(e.context, 1);
+            try {
+                await this.deviceManager.setMute(targetId, true);
+                this.sdClient.setState(e.context, 1);
+            } catch (error) {
+                this.sdClient.showAlert(e.context);
+                this.sdClient.logMessage(`[Mute] Failed for ${targetId}: ${formatError(error)}`);
+            }
             return;
         }
         const current = this.deviceManager.getTargetState(targetId)?.mute;
         const next = current === undefined ? !this.lastMuteState.get(targetId) : !current;
-        this.lastMuteState.set(targetId, Boolean(next));
-        await this.deviceManager.setMute(targetId, Boolean(next));
-        this.sdClient.setState(e.context, next ? 1 : 0);
+        try {
+            await this.deviceManager.setMute(targetId, Boolean(next));
+            this.lastMuteState.set(targetId, Boolean(next));
+            this.sdClient.setState(e.context, next ? 1 : 0);
+        } catch (error) {
+            this.sdClient.showAlert(e.context);
+            this.sdClient.logMessage(`[Mute] Failed for ${targetId}: ${formatError(error)}`);
+        }
     }
 
     async onKeyUp(event: IncomingEvent): Promise<void> {
@@ -72,7 +83,12 @@ export class MuteAction implements Action {
         const e = event as KeyUpEvent;
         const { targetId, momentary } = e.payload.settings;
         if (!targetId || !momentary) return;
-        await this.deviceManager.setMute(targetId, false);
-        this.sdClient.setState(e.context, 0);
+        try {
+            await this.deviceManager.setMute(targetId, false);
+            this.sdClient.setState(e.context, 0);
+        } catch (error) {
+            this.sdClient.showAlert(e.context);
+            this.sdClient.logMessage(`[Mute] Failed for ${targetId}: ${formatError(error)}`);
+        }
     }
 }

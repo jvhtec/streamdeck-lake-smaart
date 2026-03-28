@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { Backend, DeviceDescriptor, DeviceState, LevelMode, TargetDescriptor, TargetState } from './types';
+import { formatError } from './errorUtils';
 
 export type ActionKind = 'mute' | 'preset' | 'level';
 
@@ -114,6 +115,7 @@ export class DeviceManager extends EventEmitter {
                     this.targetStates.set(this.getTargetId(target), state);
                     this.emit('targetStateUpdated', target, state);
                 } catch (error) {
+                    this.emit('log', `State poll failed for ${this.getTargetId(target)}: ${formatError(error)}`);
                     this.targetStates.set(this.getTargetId(target), {
                         online: false,
                         lastUpdatedMs: Date.now(),
@@ -140,6 +142,7 @@ export class DeviceManager extends EventEmitter {
                         });
                         this.emit('deviceStateUpdated', device, this.deviceStates.get(deviceId));
                     } catch (error) {
+                        this.emit('log', `Preset poll failed for ${deviceId}: ${formatError(error)}`);
                         this.deviceStates.set(deviceId, {
                             online: false,
                             lastUpdatedMs: Date.now(),
@@ -180,30 +183,77 @@ export class DeviceManager extends EventEmitter {
 
     public async setMute(targetId: string, mute: boolean) {
         const target = this.targets.get(targetId);
-        if (!target) return;
+        if (!target) {
+            const error = new Error(`Target ${targetId} is not available.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
         const backend = this.backends.find((b) => b.id === target.backend);
-        if (!backend) return;
-        await backend.setMute(target, mute);
+        if (!backend) {
+            const error = new Error(`Backend ${target.backend} is not registered for ${targetId}.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
+        try {
+            await backend.setMute(target, mute);
+        } catch (error) {
+            this.emit('log', `Set mute failed for ${targetId}: ${formatError(error)}`);
+            throw error;
+        }
     }
 
     public async setLevel(targetId: string, value: number, mode: LevelMode) {
         const target = this.targets.get(targetId);
-        if (!target) return;
+        if (!target) {
+            const error = new Error(`Target ${targetId} is not available.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
         const backend = this.backends.find((b) => b.id === target.backend);
-        if (!backend) return;
-        await backend.setLevel(target, value, mode);
+        if (!backend) {
+            const error = new Error(`Backend ${target.backend} is not registered for ${targetId}.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
+        try {
+            await backend.setLevel(target, value, mode);
+        } catch (error) {
+            this.emit('log', `Set level failed for ${targetId}: ${formatError(error)}`);
+            throw error;
+        }
     }
 
     public async recallPreset(targetId: string) {
         const target = this.targets.get(targetId);
-        if (!target) return;
-        if (target.kind !== 'preset') return;
+        if (!target) {
+            const error = new Error(`Target ${targetId} is not available.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
+        if (target.kind !== 'preset') {
+            const error = new Error(`Target ${targetId} is not a preset.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
         const device = this.devices.get(target.deviceId);
-        if (!device) return;
+        if (!device) {
+            const error = new Error(`Device ${target.deviceId} is not available for ${targetId}.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
         const backend = this.backends.find((b) => b.id === target.backend);
-        if (!backend) return;
+        if (!backend) {
+            const error = new Error(`Backend ${target.backend} is not registered for ${targetId}.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
         const index = target.backend === 'lake' ? parseInt(target.id, 10) : target.index;
-        await backend.recallPreset(device, index);
+        try {
+            await backend.recallPreset(device, index);
+        } catch (error) {
+            this.emit('log', `Preset recall failed for ${targetId}: ${formatError(error)}`);
+            throw error;
+        }
     }
 
     public getTargetId(target: TargetDescriptor): string {

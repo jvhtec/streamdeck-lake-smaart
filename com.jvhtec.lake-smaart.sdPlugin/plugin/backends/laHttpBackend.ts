@@ -1,16 +1,45 @@
 import { Backend, DeviceDescriptor, LevelMode, TargetDescriptor, TargetState } from '../core/types';
 import { LaHttpClient } from './laHttpClient';
-
-interface LaInfoResponse {
-    name?: string;
-    firmware_version?: string;
-}
+import {
+    asLaDeviceInfo,
+    asLaOutputs,
+    buildLaConfigurationLoadBody,
+    coerceBoolean,
+    coerceNumber,
+    coerceString,
+    createInvalidPayloadError,
+    createUnexpectedStatusError,
+    detectLaOutputSupports,
+    formatError,
+    isPropertyWriteSuccessStatus,
+    isReadSuccessStatus,
+    isRecallSuccessStatus,
+    laActivePresetIndexPath,
+    laConfigurationLoadPath,
+    laInfoPath,
+    LaLogFn,
+    LaOutputObject,
+    laOutputsPath,
+    laOutputGainPath,
+    laOutputMutePath,
+    laOutputVolumePath,
+    laPresetNamePath,
+    laPresetUsedPath,
+    pickLaOutput,
+} from './laApi';
 
 export interface LaHttpSettings {
     discoverySubnet: string;
     discoveryHosts: string[];
     username?: string;
     password?: string;
+    debugLogging?: boolean;
+}
+
+interface OutputSnapshotCacheEntry {
+    timestamp: number;
+    outputs: LaOutputObject[] | null;
+    promise: Promise<LaOutputObject[]> | null;
 }
 
 export class LaHttpBackend implements Backend {
@@ -18,9 +47,13 @@ export class LaHttpBackend implements Backend {
     private settings: LaHttpSettings;
     private maxConcurrency = 10;
     private limiters = new Map<string, { active: number; queue: Array<() => void> }>();
+    private outputSnapshotTtlMs = 200;
+    private outputSnapshots = new Map<string, OutputSnapshotCacheEntry>();
+    private logger?: LaLogFn;
 
-    constructor(settings: LaHttpSettings) {
+    constructor(settings: LaHttpSettings, logger?: LaLogFn) {
         this.settings = settings;
+        this.logger = logger;
     }
 
     public updateSettings(settings: Partial<LaHttpSettings>) {
@@ -37,13 +70,13 @@ export class LaHttpBackend implements Backend {
     }
 
     public async getTargets(device: DeviceDescriptor): Promise<TargetDescriptor[]> {
-        const client = new LaHttpClient(device.address || '', this.settings.username, this.settings.password);
-        const outputsResp = await this.withLimiter(device.id, () => client.get<any[]>('/api/control/dsp/output'));
-        const outputsCount = outputsResp.data ? outputsResp.data.length : 0;
-        const supports = await this.detectOutputSupport(device.id, client);
+        const host = this.getDeviceHost(device);
+        const client = this.createClient(host);
+        const outputs = await this.readOutputs(client, host);
+        const supports = detectLaOutputSupports(outputs[0] || null);
 
         const targets: TargetDescriptor[] = [];
-        for (let i = 1; i <= outputsCount; i++) {
+        for (let i = 1; i <= outputs.length; i++) {
             targets.push({
                 backend: 'la_http',
                 deviceId: device.id,
@@ -55,10 +88,21 @@ export class LaHttpBackend implements Backend {
         }
 
         for (let i = 1; i <= 10; i++) {
-            const used = await this.withLimiter(device.id, () => client.get<boolean>(`/api/configuration/library/${i}/used`));
-            if (!used.data) continue;
-            const nameResp = await this.withLimiter(device.id, () => client.get<string>(`/api/configuration/library/${i}/name`));
-            const name = nameResp.data ? String(nameResp.data) : `Preset ${i}`;
+            const usedResp = await this.withLimiter(host, () => client.get<boolean>(laPresetUsedPath(i)));
+            if (!isReadSuccessStatus(usedResp.status)) {
+                throw createUnexpectedStatusError(usedResp, 200);
+            }
+            const used = coerceBoolean(usedResp.data);
+            if (used === null) {
+                throw createInvalidPayloadError(usedResp, `Expected a boolean for preset slot ${i}.`);
+            }
+            if (!used) continue;
+
+            const nameResp = await this.withLimiter(host, () => client.get<string>(laPresetNamePath(i)));
+            if (!isReadSuccessStatus(nameResp.status)) {
+                throw createUnexpectedStatusError(nameResp, 200);
+            }
+            const name = coerceString(nameResp.data) || `Preset ${i}`;
             targets.push({
                 backend: 'la_http',
                 deviceId: device.id,
@@ -75,16 +119,18 @@ export class LaHttpBackend implements Backend {
         if (target.backend !== 'la_http') {
             throw new Error('Invalid backend');
         }
-        const client = new LaHttpClient(this.getDeviceAddress(target.deviceId), this.settings.username, this.settings.password);
+        const host = this.getDeviceHost(target.deviceId);
         if (target.kind === 'output') {
-            const muteResp = await this.withLimiter(target.deviceId, () => client.get<boolean>(`/api/control/dsp/output/${target.index}/mute`));
-            const gainResp = await this.withLimiter(target.deviceId, () => client.get<number>(`/api/control/dsp/output/${target.index}/gain`));
-            const volumeResp = await this.withLimiter(target.deviceId, () => client.get<number>(`/api/control/dsp/output/${target.index}/volume`));
+            const outputs = await this.getOutputsSnapshot(host);
+            const output = pickLaOutput(outputs, target.index);
+            if (!output) {
+                throw new Error(`Output ${target.index} is missing from device snapshot.`);
+            }
             return {
-                online: muteResp.status === 200 || gainResp.status === 200 || volumeResp.status === 200,
-                mute: muteResp.data ?? undefined,
-                levelDb: gainResp.data ?? undefined,
-                volume: volumeResp.data ?? undefined,
+                online: true,
+                mute: coerceBoolean(output.mute) ?? undefined,
+                levelDb: coerceNumber(output.gain) ?? undefined,
+                volume: coerceNumber(output.volume) ?? undefined,
                 lastUpdatedMs: Date.now(),
             };
         }
@@ -97,44 +143,56 @@ export class LaHttpBackend implements Backend {
     public async setMute(target: TargetDescriptor, mute: boolean): Promise<void> {
         if (target.backend !== 'la_http') return;
         if (target.kind !== 'output') return;
-        const client = new LaHttpClient(this.getDeviceAddress(target.deviceId), this.settings.username, this.settings.password);
-        await this.withLimiter(target.deviceId, () => client.post(`/api/control/dsp/output/${target.index}/mute`, mute));
+        const host = this.getDeviceHost(target.deviceId);
+        const client = this.createClient(host);
+        const response = await this.withLimiter(host, () => client.post(laOutputMutePath(target.index), mute));
+        if (!isPropertyWriteSuccessStatus(response.status)) {
+            throw createUnexpectedStatusError(response, [200, 204]);
+        }
+        this.clearOutputSnapshot(host);
     }
 
     public async setLevel(target: TargetDescriptor, value: number, mode: LevelMode): Promise<void> {
         if (target.backend !== 'la_http') return;
         if (target.kind !== 'output') return;
-        const client = new LaHttpClient(this.getDeviceAddress(target.deviceId), this.settings.username, this.settings.password);
+        const host = this.getDeviceHost(target.deviceId);
+        const client = this.createClient(host);
         if (mode === 'volume') {
-            await this.withLimiter(target.deviceId, () => client.post(`/api/control/dsp/output/${target.index}/volume`, Math.round(value)));
+            const response = await this.withLimiter(host, () => client.post(laOutputVolumePath(target.index), Math.round(value)));
+            if (!isPropertyWriteSuccessStatus(response.status)) {
+                throw createUnexpectedStatusError(response, [200, 204]);
+            }
         } else {
-            await this.withLimiter(target.deviceId, () => client.post(`/api/control/dsp/output/${target.index}/gain`, value));
+            const response = await this.withLimiter(host, () => client.post(laOutputGainPath(target.index), value));
+            if (!isPropertyWriteSuccessStatus(response.status)) {
+                throw createUnexpectedStatusError(response, [200, 204]);
+            }
         }
+        this.clearOutputSnapshot(host);
     }
 
     public async recallPreset(device: DeviceDescriptor, index: number): Promise<void> {
-        const client = new LaHttpClient(device.address || '', this.settings.username, this.settings.password);
-        await this.withLimiter(device.id, () => client.post('/api/configuration/load', { index }));
+        const host = this.getDeviceHost(device);
+        const client = this.createClient(host);
+        const response = await this.withLimiter(host, () => client.post(laConfigurationLoadPath(), buildLaConfigurationLoadBody(index)));
+        if (!isRecallSuccessStatus(response.status)) {
+            throw createUnexpectedStatusError(response, 204);
+        }
+        this.clearOutputSnapshot(host);
     }
 
     public async getActivePresetIndex(device: DeviceDescriptor): Promise<number | null> {
-        const client = new LaHttpClient(device.address || '', this.settings.username, this.settings.password);
-        const resp = await this.withLimiter(device.id, () => client.get<number>('/api/configuration/active/index'));
-        if (resp.status !== 200 || resp.data === null) return null;
-        return Number(resp.data);
-    }
-
-    private async detectOutputSupport(deviceId: string, client: LaHttpClient): Promise<Array<'mute' | 'level' | 'volume'>> {
-        const supports: Array<'mute' | 'level' | 'volume'> = ['mute'];
-        const gainResp = await this.withLimiter(deviceId, () => client.get<number>('/api/control/dsp/output/1/gain'));
-        if (gainResp.status === 200) {
-            supports.push('level');
+        const host = this.getDeviceHost(device);
+        const client = this.createClient(host);
+        const response = await this.withLimiter(host, () => client.get<number>(laActivePresetIndexPath()));
+        if (!isReadSuccessStatus(response.status)) {
+            throw createUnexpectedStatusError(response, 200);
         }
-        const volumeResp = await this.withLimiter(deviceId, () => client.get<number>('/api/control/dsp/output/1/volume'));
-        if (volumeResp.status === 200) {
-            supports.push('volume');
+        const index = coerceNumber(response.data);
+        if (index === null) {
+            throw createInvalidPayloadError(response, 'Expected a numeric active preset index.');
         }
-        return supports;
+        return index;
     }
 
     private buildHostList(): string[] {
@@ -170,32 +228,96 @@ export class LaHttpBackend implements Backend {
             const host = queue.shift();
             if (!host) return;
             try {
-                const client = new LaHttpClient(host, this.settings.username, this.settings.password);
-                const resp = await this.withLimiter(host, () => client.get<LaInfoResponse>('/api/info'));
-                if (resp.status === 200 && resp.data) {
-                    const name = resp.data.name || host;
+                const client = this.createClient(host);
+                const response = await this.withLimiter(host, () => client.get(laInfoPath()));
+                if (!isReadSuccessStatus(response.status)) {
+                    continue;
+                }
+                const info = asLaDeviceInfo(response.data);
+                if (info) {
+                    const name = info.name || host;
                     results.push({
                         id: `la_${host}`,
                         name,
                         backend: 'la_http',
                         address: host,
-                        model: resp.data.firmware_version,
+                        model: info.firmware_version,
                         online: true,
                     });
+                } else {
+                    this.logDebug(`Ignoring ${host} because /api/info returned an unexpected payload.`);
                 }
             } catch (error) {
-                // Ignore discovery errors for this host
+                this.logDebug(`Ignoring ${host} during discovery: ${formatError(error)}`);
             }
         }
     }
 
-    private getDeviceAddress(deviceId: string): string {
-        const match = deviceId.replace('la_', '');
-        return match;
+    private createClient(host: string): LaHttpClient {
+        return new LaHttpClient(host, this.settings.username, this.settings.password, {
+            debug: Boolean(this.settings.debugLogging),
+            logger: this.logger,
+        });
     }
 
-    private async withLimiter<T>(deviceId: string, task: () => Promise<T>): Promise<T> {
-        const limiter = this.getLimiter(deviceId);
+    private async readOutputs(client: LaHttpClient, host: string): Promise<LaOutputObject[]> {
+        const response = await this.withLimiter(host, () => client.get(laOutputsPath()));
+        if (!isReadSuccessStatus(response.status)) {
+            throw createUnexpectedStatusError(response, 200);
+        }
+        const outputs = asLaOutputs(response.data);
+        if (!outputs) {
+            throw createInvalidPayloadError(response, 'Expected an array of output objects.');
+        }
+        return outputs;
+    }
+
+    private async getOutputsSnapshot(host: string): Promise<LaOutputObject[]> {
+        const existing = this.outputSnapshots.get(host);
+        const now = Date.now();
+        if (existing?.outputs && now - existing.timestamp < this.outputSnapshotTtlMs) {
+            return existing.outputs;
+        }
+        if (existing?.promise) {
+            return existing.promise;
+        }
+
+        const snapshotPromise = this.readOutputs(this.createClient(host), host)
+            .then((outputs) => {
+                this.outputSnapshots.set(host, {
+                    timestamp: Date.now(),
+                    outputs,
+                    promise: null,
+                });
+                return outputs;
+            })
+            .catch((error) => {
+                this.outputSnapshots.delete(host);
+                throw error;
+            });
+
+        this.outputSnapshots.set(host, {
+            timestamp: now,
+            outputs: existing?.outputs || null,
+            promise: snapshotPromise,
+        });
+
+        return snapshotPromise;
+    }
+
+    private clearOutputSnapshot(host: string) {
+        this.outputSnapshots.delete(host);
+    }
+
+    private getDeviceHost(device: DeviceDescriptor | string): string {
+        if (typeof device === 'string') {
+            return device.replace(/^la_/, '');
+        }
+        return device.address || device.id.replace(/^la_/, '');
+    }
+
+    private async withLimiter<T>(limiterKey: string, task: () => Promise<T>): Promise<T> {
+        const limiter = this.getLimiter(limiterKey);
         return new Promise<T>((resolve, reject) => {
             const run = () => {
                 limiter.active += 1;
@@ -216,11 +338,17 @@ export class LaHttpBackend implements Backend {
         });
     }
 
-    private getLimiter(deviceId: string) {
-        const existing = this.limiters.get(deviceId);
+    private getLimiter(deviceKey: string) {
+        const existing = this.limiters.get(deviceKey);
         if (existing) return existing;
         const limiter = { active: 0, queue: [] as Array<() => void> };
-        this.limiters.set(deviceId, limiter);
+        this.limiters.set(deviceKey, limiter);
         return limiter;
+    }
+
+    private logDebug(message: string) {
+        if (this.settings.debugLogging && this.logger) {
+            this.logger(`[LA] ${message}`);
+        }
     }
 }

@@ -98,6 +98,22 @@
             ]
         },
         {
+            "Icon": "images/actionDefault",
+            "Name": "Smaart SPL Meter",
+            "UUID": "com.jvhtec.lake-smaart.smaartspl",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/actionDefault",
+                    "TitleAlignment": "middle",
+                    "FontSize": "14"
+                }
+            ]
+        },
+        {
             "Icon": "images/icon_smaart_capture",
             "Name": "Smaart Capture",
             "UUID": "com.jvhtec.lake-smaart.smaartcapture",

@@ -1,161 +1,493 @@
+import { randomBytes } from 'crypto';
 import dgram from 'dgram';
 import { EventEmitter } from 'events';
-import { encodeDlmMsg, decodeAck, parseResponse, DlmPacket, ACK_SUCCESS } from './dlmPacket';
+import {
+    ACK_SUCCESS,
+    DLM_ALL_CLASS_MASK,
+    DLM_BROADCAST_IDHI,
+    DLM_BROADCAST_IDLO,
+    DLM_DEVICE_CLASS_ID,
+    DLM_DYNAMIC_DEVICE_PORT,
+    DLM_FIXED_DEVICE_PORT,
+    DLM_FIXED_RESPONSE_PORT,
+    DlmMessagePacket,
+    DlmBroadcastAnnouncement,
+    describePacket,
+    encodeDlmMsg,
+    encodeHeartbeat,
+    formatFrameId,
+    getProductName,
+    parseDlmPacket,
+    parseFrameId,
+} from './dlmPacket';
+
+export interface DlmClientConfig {
+    host: string;
+    port: number;
+    bindAddress?: string;
+    debug?: boolean;
+}
+
+export interface DlmTarget {
+    ip: string;
+    idHi: number;
+    idLo: number;
+    classId?: number;
+}
+
+export interface DlmDiscoveredUnit extends DlmTarget {
+    frameId: string;
+    model: string;
+    productFlag: number;
+    lastSeenMs: number;
+}
 
 interface PendingRequest {
     msgId: number;
-    resolve: (value: DlmPacket | null) => void;
-    reject: (reason: any) => void;
+    resolve: (value: DlmMessagePacket | null) => void;
+    reject: (reason: Error) => void;
     timer: NodeJS.Timeout;
     retriesLeft: number;
     command: string;
+    expectsData: boolean;
+    packet: Buffer;
+    target: DlmTarget;
 }
 
 export class DlmClient extends EventEmitter {
     private socket: dgram.Socket;
-    private msgIdCounter = 1;
+    private socketReady: Promise<void>;
     private pendingRequests = new Map<number, PendingRequest>();
-    private host: string;
-    private port: number; // Destination port (e.g. 1024 or whatever device listens on)
-    private listenPort = 6004; // Fixed response port per spec
+    private knownUnits = new Map<string, DlmDiscoveredUnit>();
+    private msgIdCounter = 1;
 
+    private readonly hostIdHi: number;
+    private readonly hostIdLo: number;
+
+    private hostFilter: string;
+    private port: number;
+    private bindAddress: string;
+    private debug: boolean;
     private isOnline = false;
-    private backoffMs = 1000;
 
-    constructor(host: string, port: number) {
+    constructor(configOrHost: DlmClientConfig | string, port?: number) {
         super();
-        this.host = host;
-        this.port = port;
-        this.socket = dgram.createSocket('udp4');
 
-        this.socket.on('message', (msg, rinfo) => {
-            this.handleMessage(msg);
-        });
+        const config = typeof configOrHost === 'string'
+            ? { host: configOrHost, port: port ?? DLM_DYNAMIC_DEVICE_PORT }
+            : configOrHost;
 
-        this.socket.on('error', (err) => {
-            console.error('UDP Socket error:', err);
-            this.setOnline(false);
-        });
+        const hostId = DlmClient.generateHostId();
+        this.hostIdHi = hostId.idHi;
+        this.hostIdLo = hostId.idLo;
 
-        this.bind();
+        this.hostFilter = config.host ?? '';
+        this.port = config.port ?? DLM_DYNAMIC_DEVICE_PORT;
+        this.bindAddress = config.bindAddress?.trim() || '';
+        this.debug = Boolean(config.debug);
+
+        this.socket = this.createSocket();
+        this.socketReady = this.bind();
+        this.socketReady.catch(() => undefined);
     }
 
-    public setTarget(host: string, port?: number) {
-        this.host = host;
-        if (port !== undefined) {
-            this.port = port;
+    public updateConfig(config: Partial<DlmClientConfig>) {
+        const previousMode = this.getResponseMode();
+        const previousBindAddress = this.bindAddress;
+
+        if (config.host !== undefined) {
+            this.hostFilter = config.host;
+        }
+        if (config.port !== undefined) {
+            this.port = config.port;
+        }
+        if (config.bindAddress !== undefined) {
+            this.bindAddress = config.bindAddress.trim();
+        }
+        if (config.debug !== undefined) {
+            this.debug = Boolean(config.debug);
+        }
+
+        if (previousMode !== this.getResponseMode() || previousBindAddress !== this.bindAddress) {
+            this.recreateSocket();
         }
     }
 
-    private bind() {
-        try {
-            this.socket.bind(this.listenPort, () => {
-                console.log(`DLM Client listening on port ${this.listenPort}`);
-            });
-        } catch (e) {
-            console.error('Failed to bind UDP port', e);
-        }
-    }
+    public async discoverUnits(timeoutMs = 1500): Promise<DlmDiscoveredUnit[]> {
+        await this.socketReady;
 
-    private setOnline(online: boolean) {
-        if (this.isOnline !== online) {
-            this.isOnline = online;
-            this.emit('onlineStatus', online);
-            if (!online) {
-                // Reset backoff or start reconnection logic if connection-oriented (UDP is connectionless, but "logical" online)
+        const discovered = new Map<string, DlmDiscoveredUnit>();
+        const onUnit = (unit: DlmDiscoveredUnit) => {
+            if (!this.matchesHostFilter(unit)) {
+                return;
             }
+            discovered.set(unit.frameId, unit);
+        };
+
+        this.on('unitDiscovered', onUnit);
+
+        try {
+            const packet = encodeHeartbeat({
+                srcIdHi: this.hostIdHi,
+                srcIdLo: this.hostIdLo,
+                msgId: this.nextMsgId(),
+            });
+
+            for (const address of this.getDiscoveryDestinations()) {
+                await this.sendBuffer(packet, this.port, address);
+                this.trace(`TX heartbeat -> ${address}:${this.port}`);
+            }
+
+            await delay(timeoutMs);
+        } finally {
+            this.off('unitDiscovered', onUnit);
         }
+
+        return Array.from(discovered.values()).sort((left, right) => left.frameId.localeCompare(right.frameId));
     }
 
-    public async send(command: string, retries = 2, timeoutMs = 250): Promise<DlmPacket | null> {
+    public async send(command: string, target: DlmTarget, retries = 2, timeoutMs = 750): Promise<DlmMessagePacket | null> {
+        await this.socketReady;
+
+        const msgId = this.nextMsgId();
+        const packet = encodeDlmMsg(command, {
+            srcIdHi: this.hostIdHi,
+            srcIdLo: this.hostIdLo,
+            destIdHi: target.idHi,
+            destIdLo: target.idLo,
+            destClass: target.classId ?? DLM_DEVICE_CLASS_ID,
+            msgId,
+        });
+        const expectsData = command.includes('?');
+
         return new Promise((resolve, reject) => {
-            const msgId = this.msgIdCounter++;
-            const packet = encodeDlmMsg(command, msgId);
-
-            const sendAttempt = () => {
-                this.socket.send(packet, this.port, this.host, (err) => {
-                    if (err) {
-                        // Socket send error logic
-                        console.error('UDP Send error', err);
-                    }
-                });
-            };
-
-            const scheduleTimeout = () => {
-                const timer = setTimeout(() => {
-                    const pending = this.pendingRequests.get(msgId);
-                    if (!pending) return;
-                    if (pending.retriesLeft > 0) {
-                        pending.retriesLeft--;
-                        console.warn(`Retrying DLM command ${command} (MsgId: ${msgId})`);
-                        sendAttempt();
-                        clearTimeout(pending.timer);
-                        pending.timer = scheduleTimeout();
-                    } else {
-                        this.pendingRequests.delete(msgId);
-                        this.setOnline(false); // Assume offline if timeout
-                        reject(new Error('Timeout'));
-                    }
-                }, timeoutMs);
-                return timer;
-            };
-
-            this.pendingRequests.set(msgId, {
+            const pending: PendingRequest = {
                 msgId,
                 resolve,
                 reject,
-                timer: scheduleTimeout(),
                 retriesLeft: retries,
-                command
-            });
+                command,
+                expectsData,
+                packet,
+                target,
+                timer: setTimeout(() => undefined, 0),
+            };
 
+            const sendAttempt = () => {
+                this.sendBuffer(packet, this.port, target.ip).catch((error) => {
+                    this.emitLog(`Lake send failed for ${command}: ${String(error)}`);
+                });
+            };
+
+            const scheduleTimeout = () => setTimeout(() => {
+                const current = this.pendingRequests.get(msgId);
+                if (!current) {
+                    return;
+                }
+
+                if (current.retriesLeft > 0) {
+                    current.retriesLeft--;
+                    this.trace(`Retrying ${command} to ${target.ip} (msgId=${msgId})`);
+                    sendAttempt();
+                    clearTimeout(current.timer);
+                    current.timer = scheduleTimeout();
+                    return;
+                }
+
+                this.pendingRequests.delete(msgId);
+                this.setOnline(false);
+                reject(new Error(`Timeout waiting for DLM response to ${command}`));
+            }, timeoutMs);
+
+            pending.timer = scheduleTimeout();
+            this.pendingRequests.set(msgId, pending);
             sendAttempt();
         });
     }
 
-    private handleMessage(msg: Buffer) {
-        // Check if it's an ACK or a Response
-        // Simplified: Try parse as ACK first
-        const ack = decodeAck(msg);
-        if (ack) {
-            const pending = this.pendingRequests.get(ack.msgId);
-            if (pending) {
-                if (ack.status === ACK_SUCCESS) {
-                    this.setOnline(true);
-                    // If this was a query, keep waiting for a response packet.
-                    if (!pending.command.includes('?')) {
-                        clearTimeout(pending.timer);
-                        this.pendingRequests.delete(ack.msgId);
-                        pending.resolve(null);
-                    }
-                } else {
-                    clearTimeout(pending.timer);
-                    this.pendingRequests.delete(ack.msgId);
-                    pending.reject(new Error(`ACK Error: ${ack.status}`));
-                }
-            }
-            // Note: If it's a query response, it might come separately or instead of ACK?
-            // The spec says "ACKs... responses...". 
-            // If we expect a value back, we might wait for a second packet?
-            // For now, let's assume `parseResponse` handles data packets.
-        }
-
-        const response = parseResponse(msg);
-        if (response) {
-            // If we had a pending request for this MsgID that expected data
-            const pending = this.pendingRequests.get(response.msgId);
-            if (pending) {
-                clearTimeout(pending.timer);
-                this.pendingRequests.delete(response.msgId);
-                this.setOnline(true);
-                pending.resolve(response);
-            } else {
-                // Unsolicited or late response
-            }
-        }
+    public getKnownUnits(): DlmDiscoveredUnit[] {
+        return Array.from(this.knownUnits.values()).sort((left, right) => left.frameId.localeCompare(right.frameId));
     }
 
     public close() {
-        this.socket.close();
+        this.rejectPending(new Error('DLM client closed'));
+        try {
+            this.socket.close();
+        } catch {
+            // Ignore close races during shutdown.
+        }
     }
+
+    private createSocket() {
+        const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+
+        socket.on('message', (msg, rinfo) => {
+            this.handleMessage(msg, rinfo);
+        });
+
+        socket.on('error', (err) => {
+            this.emitLog(`Lake UDP socket error: ${String(err)}`);
+            this.setOnline(false);
+        });
+
+        return socket;
+    }
+
+    private getResponseMode() {
+        return this.port === DLM_FIXED_DEVICE_PORT ? 'fixed' : 'dynamic';
+    }
+
+    private recreateSocket() {
+        this.rejectPending(new Error('DLM socket reconfigured'));
+
+        try {
+            this.socket.removeAllListeners();
+            this.socket.close();
+        } catch {
+            // Ignore close races.
+        }
+
+        this.socket = this.createSocket();
+        this.socketReady = this.bind();
+        this.socketReady.catch(() => undefined);
+    }
+
+    private bind() {
+        const bindPort = this.getResponseMode() === 'fixed' ? DLM_FIXED_RESPONSE_PORT : 0;
+        const bindAddress = this.bindAddress || '0.0.0.0';
+
+        return new Promise<void>((resolve, reject) => {
+            const handleListening = () => {
+                this.socket.off('error', handleBindError);
+                try {
+                    this.socket.setBroadcast(true);
+                } catch {
+                    // Broadcast isn't required for unicast-only scenarios.
+                }
+                const address = this.socket.address();
+                const localPort = typeof address === 'string' ? bindPort : address.port;
+                this.emitLog(`Lake DLM listening on ${bindAddress}:${localPort} (${this.getResponseMode()} mode -> ${this.port})`);
+                resolve();
+            };
+
+            const handleBindError = (err: Error) => {
+                this.socket.off('listening', handleListening);
+                this.emitLog(`Lake DLM bind failed on ${bindAddress}:${bindPort || 0}: ${String(err)}`);
+                reject(err);
+            };
+
+            this.socket.once('listening', handleListening);
+            this.socket.once('error', handleBindError);
+
+            try {
+                this.socket.bind({ port: bindPort, address: bindAddress, exclusive: false });
+            } catch (error) {
+                this.socket.off('listening', handleListening);
+                this.socket.off('error', handleBindError);
+                reject(error as Error);
+            }
+        });
+    }
+
+    private async sendBuffer(packet: Buffer, port: number, address: string) {
+        await new Promise<void>((resolve, reject) => {
+            this.socket.send(packet, port, address, (err) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve();
+            });
+        });
+        this.trace(`TX ${address}:${port} ${packet.toString('hex')}`);
+    }
+
+    private handleMessage(msg: Buffer, rinfo: dgram.RemoteInfo) {
+        const packet = parseDlmPacket(msg);
+        if (!packet) {
+            this.trace(`RX ${rinfo.address}:${rinfo.port} undecodable ${msg.toString('hex')}`);
+            return;
+        }
+
+        if (packet.header.srcIdHi === this.hostIdHi && packet.header.srcIdLo === this.hostIdLo) {
+            this.trace(`RX ${rinfo.address}:${rinfo.port} ignored self-originated packet`);
+            return;
+        }
+
+        if (!this.isPacketForHost(packet.header.destIdHi, packet.header.destIdLo)) {
+            this.trace(`RX ${rinfo.address}:${rinfo.port} ignored packet not addressed to host`);
+            return;
+        }
+
+        this.trace(`RX ${rinfo.address}:${rinfo.port} ${describePacket(packet)}`);
+
+        if (packet.kind === 'broadcast') {
+            this.handleDiscoveryAnnouncement(packet.announcement, rinfo.address);
+            return;
+        }
+
+        if (packet.kind === 'multi_broadcast') {
+            packet.announcements.forEach((announcement) => this.handleDiscoveryAnnouncement(announcement, rinfo.address));
+            return;
+        }
+
+        if (packet.kind === 'ack') {
+            const pending = this.pendingRequests.get(packet.header.msgId);
+            if (!pending) {
+                return;
+            }
+
+            if (packet.result === ACK_SUCCESS) {
+                this.setOnline(true);
+                if (!pending.expectsData) {
+                    clearTimeout(pending.timer);
+                    this.pendingRequests.delete(packet.header.msgId);
+                    pending.resolve(null);
+                }
+                return;
+            }
+
+            clearTimeout(pending.timer);
+            this.pendingRequests.delete(packet.header.msgId);
+            pending.reject(new Error(`Lake ACK error ${packet.result} for ${pending.command}`));
+            return;
+        }
+
+        if (packet.kind === 'message') {
+            const pending = this.pendingRequests.get(packet.header.msgId);
+            if (!pending) {
+                return;
+            }
+
+            clearTimeout(pending.timer);
+            this.pendingRequests.delete(packet.header.msgId);
+            this.setOnline(true);
+            pending.resolve(packet);
+        }
+    }
+
+    private handleDiscoveryAnnouncement(announcement: DlmBroadcastAnnouncement, ip: string) {
+        const baseClass = announcement.header.srcClass & ~DLM_ALL_CLASS_MASK;
+        if (baseClass !== DLM_DEVICE_CLASS_ID) {
+            return;
+        }
+
+        const frameId = formatFrameId(announcement.header.srcIdHi, announcement.header.srcIdLo);
+        const productFlag = announcement.productFlag >>> 0;
+        const unit: DlmDiscoveredUnit = {
+            frameId,
+            ip,
+            idHi: announcement.header.srcIdHi,
+            idLo: announcement.header.srcIdLo,
+            classId: baseClass,
+            model: getProductName(productFlag),
+            productFlag,
+            lastSeenMs: Date.now(),
+        };
+
+        this.knownUnits.set(frameId, unit);
+        this.emit('unitDiscovered', unit);
+        this.trace(`Discovered ${unit.model} ${frameId} @ ${ip}`);
+    }
+
+    private matchesHostFilter(unit: DlmDiscoveredUnit) {
+        const filter = this.hostFilter.trim();
+        if (!filter) {
+            return true;
+        }
+
+        const frameId = parseFrameId(filter);
+        if (frameId) {
+            return unit.idHi === frameId.idHi && unit.idLo === frameId.idLo;
+        }
+
+        return unit.ip === filter;
+    }
+
+    private getDiscoveryDestinations() {
+        const destinations = new Set<string>();
+        const host = this.hostFilter.trim();
+
+        if (isIpv4Address(host)) {
+            destinations.add(host);
+        }
+
+        if (isLoopbackAddress(this.bindAddress)) {
+            destinations.add(this.bindAddress);
+        }
+
+        const allLoopback = Array.from(destinations).every((address) => isLoopbackAddress(address));
+        if (destinations.size === 0 || !allLoopback) {
+            destinations.add('255.255.255.255');
+        }
+
+        return Array.from(destinations);
+    }
+
+    private isPacketForHost(destIdHi: number, destIdLo: number) {
+        return (
+            (destIdHi === DLM_BROADCAST_IDHI && destIdLo === DLM_BROADCAST_IDLO) ||
+            (destIdHi === this.hostIdHi && destIdLo === this.hostIdLo)
+        );
+    }
+
+    private nextMsgId() {
+        const next = this.msgIdCounter >>> 0;
+        this.msgIdCounter = (this.msgIdCounter + 1) >>> 0;
+        if (this.msgIdCounter === 0xffffffff) {
+            this.msgIdCounter = 1;
+        }
+        return next === 0xffffffff ? 1 : next;
+    }
+
+    private rejectPending(error: Error) {
+        for (const pending of this.pendingRequests.values()) {
+            clearTimeout(pending.timer);
+            pending.reject(error);
+        }
+        this.pendingRequests.clear();
+    }
+
+    private setOnline(online: boolean) {
+        if (this.isOnline === online) {
+            return;
+        }
+
+        this.isOnline = online;
+        this.emit('onlineStatus', online);
+    }
+
+    private emitLog(message: string) {
+        this.emit('log', message);
+    }
+
+    private trace(message: string) {
+        if (!this.debug) {
+            return;
+        }
+
+        this.emit('log', `[Lake DLM] ${message}`);
+    }
+
+    private static generateHostId() {
+        const bytes = randomBytes(8);
+        return {
+            idHi: bytes.readUInt32LE(0),
+            idLo: bytes.readUInt32LE(4),
+        };
+    }
+}
+
+function delay(ms: number) {
+    return new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
+
+function isIpv4Address(value: string) {
+    return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value);
+}
+
+function isLoopbackAddress(value: string) {
+    return value === '127.0.0.1';
 }
