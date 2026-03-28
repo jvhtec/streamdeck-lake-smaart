@@ -114,6 +114,7 @@ let uuid = null;
 let actionInfo = null;
 let catalog = { devices: [], targets: [], laAdapters: [] };
 let lastGlobalSettings = {};
+let catalogRefreshTimer = null;
 
 function getActionId() {
     return actionInfo?.action || '';
@@ -130,6 +131,13 @@ function isSmaartAction() {
 
 function isSmaartGeneratorGainAction() {
     return getActionName() === 'smaartgengain';
+}
+
+function getRequiredCatalogAction() {
+    if (isSmaartAction()) {
+        return null;
+    }
+    return 'level';
 }
 
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
@@ -209,6 +217,7 @@ function loadGlobalSettings(settings) {
     });
     updateLakeAdapterOptions(settings.lakeBindAddress);
     updateLaAdapterOptions(settings.laBindAddress);
+    scheduleCatalogRefresh();
     updateUI();
 }
 
@@ -252,6 +261,8 @@ function saveGlobalSettings() {
         context: uuid,
         payload
     }));
+
+    scheduleCatalogRefresh();
 }
 
 function updateLaAdapterOptions(selectedAddress) {
@@ -372,6 +383,17 @@ function refreshCatalog() {
     requestCatalog();
 }
 
+function scheduleCatalogRefresh(delayMs = 400) {
+    if (!websocket || isSmaartAction()) return;
+    if (catalogRefreshTimer) {
+        clearTimeout(catalogRefreshTimer);
+    }
+    catalogRefreshTimer = setTimeout(() => {
+        catalogRefreshTimer = null;
+        requestCatalog();
+    }, delayMs);
+}
+
 function onDeviceChange() {
     var newDeviceId = document.getElementById('deviceId').value;
     updateSelectors(newDeviceId, null);
@@ -385,7 +407,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     if (!deviceSelect || !targetSelect) return;
     if (isSmaartAction()) return;
 
-    const devices = catalog.devices || [];
+    const devices = (catalog.devices || []).filter((device) => deviceSupportsRequiredAction(device));
     const targets = catalog.targets || [];
 
     deviceSelect.innerHTML = '';
@@ -405,13 +427,12 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     if (noDevices) noDevices.style.display = 'none';
 
-    const activeDevice = selectedDeviceId || deviceSelect.value || devices[0].id;
+    const activeDevice = devices.some((device) => device.id === selectedDeviceId)
+        ? selectedDeviceId
+        : (deviceSelect.value || devices[0].id);
     deviceSelect.value = activeDevice;
 
-    const filteredTargets = targets.filter((target) => {
-        if (target.deviceId !== activeDevice) return false;
-        return target.supports && target.supports.includes('level');
-    });
+    const filteredTargets = targets.filter((target) => target.deviceId === activeDevice && isTargetSelectableForCurrentAction(target));
 
     targetSelect.innerHTML = '';
     filteredTargets.forEach((target) => {
@@ -424,11 +445,34 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
         targetSelect.appendChild(option);
     });
 
-    if (selectedTargetId) {
+    if (selectedTargetId && filteredTargets.some((target) => buildCatalogTargetId(target) === selectedTargetId)) {
         targetSelect.value = selectedTargetId;
+    } else if (targetSelect.options.length > 0) {
+        targetSelect.value = targetSelect.options[0].value;
     }
 
     syncLevelModeOptions();
+}
+
+function deviceSupportsRequiredAction(device) {
+    const requiredAction = getRequiredCatalogAction();
+    if (!requiredAction) return true;
+
+    if (Array.isArray(device.supportedActions) && device.supportedActions.length > 0) {
+        return device.supportedActions.includes(requiredAction);
+    }
+
+    return (catalog.targets || []).some((target) => target.deviceId === device.id && isTargetSelectableForCurrentAction(target));
+}
+
+function isTargetSelectableForCurrentAction(target) {
+    return target.supports && target.supports.includes('level');
+}
+
+function buildCatalogTargetId(target) {
+    return target.backend === 'lake'
+        ? `${target.backend}:${target.deviceId}:${target.kind}:${target.id}`
+        : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'output' ? target.id : target.index}`;
 }
 
 function getSelectedCatalogTarget() {

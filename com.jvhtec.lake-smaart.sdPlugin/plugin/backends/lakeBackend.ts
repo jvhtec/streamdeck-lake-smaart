@@ -31,6 +31,9 @@ export class LakeBackend implements Backend {
     }
 
     public updateSettings(settings: Partial<LakeSettings>) {
+        const previousHost = this.settings.host;
+        const previousPort = this.settings.port;
+        const previousBindAddress = this.settings.bindAddress;
         this.settings = { ...this.settings, ...settings };
         this.client.updateConfig({
             host: this.settings.host,
@@ -38,6 +41,13 @@ export class LakeBackend implements Backend {
             bindAddress: this.settings.bindAddress,
             debug: this.settings.debug,
         });
+        if (
+            previousHost !== this.settings.host ||
+            previousPort !== this.settings.port ||
+            previousBindAddress !== this.settings.bindAddress
+        ) {
+            this.unitsByDeviceId.clear();
+        }
     }
 
     public async discover(): Promise<DeviceDescriptor[]> {

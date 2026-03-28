@@ -25,6 +25,7 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 - Control Lake LM module/group gain and mute with Stream Deck+ encoders.
 - Toggle mute on Lake LM modules/groups and documented L-Acoustics output targets such as P1 output settings.
 - Recall Lake presets plus L-Acoustics configurations from keys.
+- Filter action device dropdowns to only the devices that have valid targets for that action on the selected NIC.
 - Adjust Smaart generator gain from a dial and press the dial to toggle the generator on or off.
 - Display live Smaart SPL values on a key with inspector-based input and metric selection.
 - Trigger Smaart generator and measurement-focused actions for the currently active Smaart measurement.
@@ -35,9 +36,9 @@ Default discovery settings (overridable in Stream Deck global settings):
 
 - Lake device filter: optional device IP or frame ID, for example `169.254.23.45` or `3d000011:d6ed9201`
 - Lake port: `6016` by default for dynamic response mode
-- Lake adapter IP: optional local NIC selection for binding Lake traffic when multiple adapters are active
+- Lake adapter IP: optional local NIC selection for binding Lake traffic when multiple adapters are active; changing it refreshes the inspector with reachable Lake targets on that NIC
 - Lake debug log: optional verbose DLM logging to the Stream Deck log
-- L-Acoustics adapter IP: optional local NIC address used for HTTP binding and auto-discovery subnet derivation
+- L-Acoustics adapter IP: optional local NIC address used for HTTP binding and auto-discovery subnet derivation; changing it refreshes the inspector with reachable L-Acoustics targets on that NIC
 - L-Acoustics discovery subnet: optional override, otherwise derived from the selected LA adapter
 - Optional explicit L-Acoustics hosts: `192.168.1.20,192.168.1.21`
 - Smaart host: `127.0.0.1` on port `26000`

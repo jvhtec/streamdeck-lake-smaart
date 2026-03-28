@@ -16,6 +16,7 @@ import { KeySmaartSplMeterAction } from './actions/keySmaartSplMeter';
 import { SmaartGeneratorGainDialAction } from './actions/smaartGeneratorGainDialAction';
 import { PiServer } from './piServer';
 import { deriveDiscoverySubnet, findIpv4AdapterByAddress, listIpv4Adapters } from './core/networkAdapters';
+import { buildInspectorDevices } from './core/inspectorCatalog';
 
 const args = process.argv.slice(2);
 let port = '0';
@@ -78,8 +79,20 @@ const laHttpBackend = new LaHttpBackend({
 const smaartClient = new SmaartClient(defaultSettings.smaartHost, defaultSettings.smaartPort);
 
 const deviceManager = new DeviceManager([lakeBackend, laHttpBackend]);
+const openInspectorContexts = new Set<string>();
 deviceManager.on('log', (message: string) => {
     logPluginMessage(`[DeviceManager] ${message}`);
+});
+deviceManager.on('catalogUpdated', () => {
+    const catalog = buildInspectorCatalog();
+
+    openInspectorContexts.forEach((context) => {
+        sdClient.sendToPropertyInspector(context, catalog);
+    });
+
+    if (piServer) {
+        piServer.sendCatalog(catalog.devices, catalog.targets, catalog.laAdapters);
+    }
 });
 dlmClient.on('log', (message: string) => {
     logPluginMessage(message);
@@ -98,9 +111,11 @@ function buildLaAdapterCatalog() {
 }
 
 function buildInspectorCatalog() {
+    const devices = deviceManager.getDevices();
+    const targets = deviceManager.getTargets();
     return {
-        devices: deviceManager.getDevices(),
-        targets: deviceManager.getTargets(),
+        devices: buildInspectorDevices(devices, targets),
+        targets,
         laAdapters: buildLaAdapterCatalog(),
     };
 }
@@ -220,6 +235,7 @@ sdClient.onEvents((event) => {
     }
     // Auto-open browser PI when the embedded PI can't load
     if (piServerReady && event.event === 'propertyInspectorDidAppear') {
+        openInspectorContexts.add(event.context);
         const piEvent = event;
         piServerReady.then(() => {
             if (!piServerPort) return;
@@ -230,6 +246,12 @@ sdClient.onEvents((event) => {
             const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(piEvent.action)}&context=${encodeURIComponent(piEvent.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
             sdClient.openUrl(url);
         });
+    }
+    if (event.event === 'propertyInspectorDidAppear') {
+        openInspectorContexts.add(event.context);
+    }
+    if (event.event === 'willDisappear') {
+        openInspectorContexts.delete(event.context);
     }
 
     if (event.event === 'didReceiveGlobalSettings') {

@@ -93,6 +93,7 @@ export class DlmClient extends EventEmitter {
 
     public updateConfig(config: Partial<DlmClientConfig>) {
         const previousMode = this.getResponseMode();
+        const previousHostFilter = this.hostFilter;
         const previousBindAddress = this.bindAddress;
 
         if (config.host !== undefined) {
@@ -110,6 +111,10 @@ export class DlmClient extends EventEmitter {
 
         if (previousMode !== this.getResponseMode() || previousBindAddress !== this.bindAddress) {
             this.recreateSocket();
+        }
+
+        if (previousHostFilter !== this.hostFilter || previousBindAddress !== this.bindAddress) {
+            this.knownUnits.clear();
         }
     }
 
@@ -207,6 +212,10 @@ export class DlmClient extends EventEmitter {
 
     public getKnownUnits(): DlmDiscoveredUnit[] {
         return Array.from(this.knownUnits.values()).sort((left, right) => left.frameId.localeCompare(right.frameId));
+    }
+
+    public clearKnownUnits() {
+        this.knownUnits.clear();
     }
 
     public close() {

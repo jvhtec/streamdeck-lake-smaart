@@ -75,6 +75,7 @@ let lastGlobalSettings = {};
 let lastSettings = {};
 let smaartSplCatalog = { inputs: [], metrics: [], error: '' };
 let smaartSplRequestSeq = 0;
+let catalogRefreshTimer = null;
 
 function getActionName() {
     var parts = action.split('.');
@@ -99,6 +100,19 @@ function isMuteAction() {
 
 function isPresetAction() {
     return getActionName() === 'presetRecall';
+}
+
+function getRequiredCatalogAction() {
+    if (isSmaartAction()) {
+        return null;
+    }
+    if (isPresetAction()) {
+        return 'preset';
+    }
+    if (isMuteAction()) {
+        return 'mute';
+    }
+    return 'level';
 }
 
 (function init() {
@@ -193,6 +207,7 @@ function loadGlobalSettings(settings) {
     if (isSmaartSplAction()) {
         requestSmaartSplCatalog();
     }
+    scheduleCatalogRefresh();
     if (typeof updateUI === 'function') updateUI();
 }
 
@@ -236,6 +251,7 @@ function saveGlobalSettings() {
     if (isSmaartSplAction()) {
         setTimeout(requestSmaartSplCatalog, 0);
     }
+    scheduleCatalogRefresh();
 }
 
 function updateLaAdapterOptions(selectedAddress) {
@@ -305,6 +321,17 @@ function requestCatalog() {
 
 function refreshCatalog() {
     requestCatalog();
+}
+
+function scheduleCatalogRefresh(delayMs = 400) {
+    if (!websocket || isSmaartAction()) return;
+    if (catalogRefreshTimer) {
+        clearTimeout(catalogRefreshTimer);
+    }
+    catalogRefreshTimer = setTimeout(function() {
+        catalogRefreshTimer = null;
+        requestCatalog();
+    }, delayMs);
 }
 
 function requestSmaartSplCatalog() {
@@ -469,7 +496,9 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     if (!deviceSelect || !targetSelect) return;
     if (isSmaartAction()) return;
 
-    var devices = catalog.devices || [];
+    var devices = (catalog.devices || []).filter(function(device) {
+        return deviceSupportsRequiredAction(device);
+    });
     var targets = catalog.targets || [];
 
     deviceSelect.innerHTML = '';
@@ -489,32 +518,56 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     if (noDevices) noDevices.style.display = 'none';
 
-    var activeDevice = selectedDeviceId || deviceSelect.value || devices[0].id;
+    var activeDevice = devices.some(function(device) { return device.id === selectedDeviceId; })
+        ? selectedDeviceId
+        : (deviceSelect.value || devices[0].id);
     deviceSelect.value = activeDevice;
 
     var filteredTargets = targets.filter(function(target) {
-        if (target.deviceId !== activeDevice) return false;
-        if (isPresetAction()) return target.kind === 'preset';
-        if (isMuteAction()) return target.supports && target.supports.includes('mute');
-        return target.supports && target.supports.includes('level');
+        return target.deviceId === activeDevice && isTargetSelectableForCurrentAction(target);
     });
 
     targetSelect.innerHTML = '';
     filteredTargets.forEach(function(target) {
         var option = document.createElement('option');
-        var id = target.backend === 'lake'
-            ? target.backend + ':' + target.deviceId + ':' + target.kind + ':' + target.id
-            : target.backend + ':' + target.deviceId + ':' + target.kind + ':' + (target.kind === 'output' ? target.id : target.index);
+        var id = buildCatalogTargetId(target);
         option.value = id;
         option.textContent = target.name;
         targetSelect.appendChild(option);
     });
 
-    if (selectedTargetId) {
+    if (selectedTargetId && filteredTargets.some(function(target) { return buildCatalogTargetId(target) === selectedTargetId; })) {
         targetSelect.value = selectedTargetId;
+    } else if (targetSelect.options.length > 0) {
+        targetSelect.value = targetSelect.options[0].value;
     }
 
     syncLevelModeOptions();
+}
+
+function deviceSupportsRequiredAction(device) {
+    var requiredAction = getRequiredCatalogAction();
+    if (!requiredAction) return true;
+
+    if (Array.isArray(device.supportedActions) && device.supportedActions.length > 0) {
+        return device.supportedActions.includes(requiredAction);
+    }
+
+    return (catalog.targets || []).some(function(target) {
+        return target.deviceId === device.id && isTargetSelectableForCurrentAction(target);
+    });
+}
+
+function isTargetSelectableForCurrentAction(target) {
+    if (isPresetAction()) return target.kind === 'preset';
+    if (isMuteAction()) return target.supports && target.supports.includes('mute');
+    return target.supports && target.supports.includes('level');
+}
+
+function buildCatalogTargetId(target) {
+    return target.backend === 'lake'
+        ? target.backend + ':' + target.deviceId + ':' + target.kind + ':' + target.id
+        : target.backend + ':' + target.deviceId + ':' + target.kind + ':' + (target.kind === 'output' ? target.id : target.index);
 }
 
 function getSelectedCatalogTarget() {
