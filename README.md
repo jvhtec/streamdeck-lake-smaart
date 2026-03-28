@@ -2,6 +2,8 @@
 
 A Stream Deck+ plugin that connects to Lake LM modules, L-Acoustics P1 / LC16D devices, and the Smaart API to provide fast control of mute, level, input router priority, preset recall, and measurement utilities from Stream Deck keys and dials.
 
+In Stream Deck, the plugin is published under the author name `JVH` and its actions appear in the action list under `Lake + L-Acoustics + Smaart Controller`.
+
 ![Lake + L-Acoustics plugin icon](com.jvhtec.lake-smaart.sdPlugin/images/pluginIcon.png)
 
 ## Screenshots

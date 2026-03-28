@@ -259,7 +259,7 @@
         }
     ],
     "SDKVersion": 2,
-    "Author": "JVHTEC",
+    "Author": "JVH",
     "Description": "Lake LM, L-Acoustics, and Smaart control surface",
     "Name": "Lake + L-Acoustics + Smaart Controller",
     "Icon": "images/pluginIcon",
@@ -282,5 +282,5 @@
     "Nodejs": {
         "Version": "20"
     },
-    "Category": "Audio"
+    "Category": "Lake + L-Acoustics + Smaart Controller"
 }
