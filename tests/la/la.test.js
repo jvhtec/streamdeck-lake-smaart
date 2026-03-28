@@ -67,7 +67,7 @@ test('LaHttpClient retries digest auth on HTTP 403', async (t) => {
     assert.equal(server.requests[1].authorized, true);
 });
 
-test('LaHttpBackend discovers P1 output families and dedupes snapshot reads', async (t) => {
+test('LaHttpBackend discovers P1 input families and dedupes snapshot reads', async (t) => {
     const server = createMockLaServer({ profile: 'p1' });
     const address = await server.start();
     t.after(async () => server.stop());
@@ -82,20 +82,21 @@ test('LaHttpBackend discovers P1 output families and dedupes snapshot reads', as
     assert.equal(device.name, 'P1 Frontfill');
 
     const targets = await backend.getTargets(device);
-    const outputTargets = targets.filter((target) => target.kind === 'output');
+    const inputTargets = targets.filter((target) => target.kind === 'input');
     const presetTargets = targets.filter((target) => target.kind === 'preset');
 
-    assert.equal(outputTargets.length, 18);
-    assert.ok(outputTargets.some((target) => target.id === 'ana:1'));
-    assert.ok(outputTargets.some((target) => target.id === 'avb:8'));
+    assert.equal(inputTargets.length, 19);
+    assert.ok(inputTargets.some((target) => target.id === 'ana:1'));
+    assert.ok(inputTargets.some((target) => target.id === 'mic:2'));
+    assert.ok(inputTargets.some((target) => target.id === 'mpl'));
     assert.equal(presetTargets.length, 3);
 
-    const before = countRequests(server.requests, 'GET', '/api/output/settings');
+    const before = countRequests(server.requests, 'GET', '/api/input/settings');
     const [stateA, stateB] = await Promise.all([
-        backend.getState(outputTargets.find((target) => target.id === 'ana:1')),
-        backend.getState(outputTargets.find((target) => target.id === 'mon:1')),
+        backend.getState(inputTargets.find((target) => target.id === 'ana:1')),
+        backend.getState(inputTargets.find((target) => target.id === 'mpl')),
     ]);
-    const after = countRequests(server.requests, 'GET', '/api/output/settings');
+    const after = countRequests(server.requests, 'GET', '/api/input/settings');
 
     assert.equal(after - before, 1);
     assert.equal(typeof stateA.mute, 'boolean');
@@ -119,7 +120,7 @@ test('LaHttpBackend uses one configuration library read for P1 target discovery'
     assert.equal(countRequestsMatching(server.requests, 'GET', /^\/api\/configuration\/library\/\d+\/used$/), 0);
 });
 
-test('LaHttpBackend exposes LC16D preset targets without unsupported output controls', async (t) => {
+test('LaHttpBackend exposes LC16D preset targets without unsupported mute/level controls', async (t) => {
     const server = createMockLaServer({ profile: 'lc16d' });
     const address = await server.start();
     t.after(async () => server.stop());
@@ -133,7 +134,7 @@ test('LaHttpBackend exposes LC16D preset targets without unsupported output cont
     const targets = await backend.getTargets(device);
 
     assert.equal(device.model, 'LC16D');
-    assert.equal(targets.filter((target) => target.kind === 'output').length, 0);
+    assert.equal(targets.filter((target) => target.kind !== 'preset').length, 0);
     assert.equal(targets.filter((target) => target.kind === 'preset').length, 3);
 
     await backend.recallPreset(device, 2);
@@ -164,7 +165,7 @@ test('LaHttpBackend rejects failed P1 property writes', async (t) => {
     const server = createMockLaServer({
         profile: 'p1',
         faults: {
-            'POST /api/output/settings/ana/1/mute': { status: 500, body: { error: 'nope' } },
+            'POST /api/input/settings/ana/1/mute': { status: 500, body: { error: 'nope' } },
         },
     });
     const address = await server.start();
@@ -177,7 +178,7 @@ test('LaHttpBackend rejects failed P1 property writes', async (t) => {
 
     const [device] = await backend.discover();
     const targets = await backend.getTargets(device);
-    const outputTarget = targets.find((target) => target.kind === 'output' && target.id === 'ana:1');
+    const outputTarget = targets.find((target) => target.kind === 'input' && target.id === 'ana:1');
 
     await assert.rejects(() => backend.setMute(outputTarget, true), /HTTP 500/);
 });
@@ -194,7 +195,7 @@ test('MuteAction shows an alert instead of optimistic state on failure', async (
         context: 'ctx',
         payload: {
             settings: {
-                targetId: 'la_http:la_device:output:ana:1',
+                targetId: 'la_http:la_device:input:ana:1',
                 momentary: false,
             },
         },
@@ -219,7 +220,7 @@ test('LevelEncoderAction shows an alert instead of optimistic feedback on failur
         payload: {
             ticks: 1,
             settings: {
-                targetId: 'la_http:la_device:output:ana:1',
+                targetId: 'la_http:la_device:input:ana:1',
                 levelMode: 'gain',
                 stepSize: 1,
                 minLevel: -60,
@@ -231,6 +232,100 @@ test('LevelEncoderAction shows an alert instead of optimistic feedback on failur
     assert.equal(sdClient.alerts.length, 1);
     assert.equal(sdClient.feedback.length, 0);
     assert.match(sdClient.logs[0], /\[Level\] Failed/);
+});
+
+test('Backend-scoped Lake mute action rejects L-Acoustics targets', async () => {
+    const sdClient = new FakeSDClient();
+    const deviceManager = new FakeDeviceManager();
+    const action = new MuteAction(sdClient, deviceManager, {
+        allowedBackend: 'lake',
+        logPrefix: 'Lake Mute',
+    });
+
+    await action.onKeyDown({
+        event: 'keyDown',
+        context: 'ctx',
+        payload: {
+            settings: {
+                targetId: 'la_http:la_device:input:ana:1',
+                momentary: false,
+            },
+        },
+    });
+
+    assert.equal(sdClient.alerts.length, 1);
+    assert.equal(deviceManager.muteCalls, 0);
+    assert.match(sdClient.logs[0], /not a Lake target/);
+});
+
+test('Backend-scoped L-Acoustics level action rejects Lake targets', async () => {
+    const sdClient = new FakeSDClient();
+    const deviceManager = new FakeDeviceManager({
+        target: {
+            name: 'Module A',
+            backend: 'lake',
+            deviceId: 'lake_device',
+            kind: 'module',
+            id: 'A',
+            supports: ['mute', 'level'],
+        },
+    });
+    const action = new LevelEncoderAction(sdClient, deviceManager, {
+        allowedBackend: 'la_http',
+        logPrefix: 'L-Acoustics Level',
+    });
+
+    await action.onDialRotate({
+        event: 'dialRotate',
+        context: 'ctx',
+        payload: {
+            ticks: 1,
+            settings: {
+                targetId: 'lake:lake_device:module:A',
+                levelMode: 'gain',
+                stepSize: 1,
+                minLevel: -60,
+                maxLevel: 15,
+            },
+        },
+    });
+
+    assert.equal(sdClient.alerts.length, 1);
+    assert.equal(deviceManager.levelCalls, 0);
+    assert.match(sdClient.logs[0], /not a L-Acoustics target/);
+});
+
+test('Backend-scoped L-Acoustics preset action rejects Lake targets', async () => {
+    const sdClient = new FakeSDClient();
+    const deviceManager = new FakeDeviceManager({
+        target: {
+            name: 'Frame Preset 2',
+            backend: 'lake',
+            deviceId: 'lake_device',
+            kind: 'preset',
+            id: '2',
+            supports: [],
+        },
+    });
+    const action = new PresetRecallAction(sdClient, deviceManager, {
+        allowedBackend: 'la_http',
+        logPrefix: 'L-Acoustics Preset',
+    });
+
+    await action.onKeyDown({
+        event: 'keyDown',
+        context: 'ctx',
+        payload: {
+            settings: {
+                targetId: 'lake:lake_device:preset:2',
+                requireDoublePress: false,
+            },
+        },
+    });
+
+    assert.equal(sdClient.alerts.length, 1);
+    assert.equal(deviceManager.recallCalls, 0);
+    assert.match(sdClient.logs[0], /not a L-Acoustics target/);
 });
 
 test('PresetRecallAction shows an alert instead of OK on failure', async () => {
@@ -302,15 +397,15 @@ class FakeDeviceManager extends EventEmitter {
     constructor(options = {}) {
         super();
         this.options = options;
-        this.target = {
+        this.target = options.target || {
             name: 'Analog 1',
             backend: 'la_http',
             deviceId: 'la_device',
-            kind: 'output',
+            kind: 'input',
             id: 'ana:1',
             index: 1,
             supports: ['mute', 'level'],
-            path: '/api/output/settings/ana/1',
+            path: '/api/input/settings/ana/1',
             profile: 'p1',
         };
         this.targetState = options.targetState || {
@@ -319,6 +414,9 @@ class FakeDeviceManager extends EventEmitter {
             levelDb: 0,
             lastUpdatedMs: Date.now(),
         };
+        this.muteCalls = 0;
+        this.levelCalls = 0;
+        this.recallCalls = 0;
     }
 
     registerBinding() {}
@@ -334,22 +432,25 @@ class FakeDeviceManager extends EventEmitter {
     }
 
     getTargetId() {
-        return 'la_http:la_device:output:ana:1';
+        return 'la_http:la_device:input:ana:1';
     }
 
     async setMute() {
+        this.muteCalls += 1;
         if (this.options.setMuteError) {
             throw this.options.setMuteError;
         }
     }
 
     async setLevel() {
+        this.levelCalls += 1;
         if (this.options.setLevelError) {
             throw this.options.setLevelError;
         }
     }
 
     async recallPreset() {
+        this.recallCalls += 1;
         if (this.options.recallPresetError) {
             throw this.options.recallPresetError;
         }

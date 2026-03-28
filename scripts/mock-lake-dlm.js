@@ -5,6 +5,7 @@ const DEFAULT_PORT = 6016;
 const DEFAULT_BIND_ADDRESS = '127.0.0.1';
 const DEFAULT_FRAME_ID = '01020304:11223344';
 const DEFAULT_PRODUCT_FLAG = 0x0c;
+const DEFAULT_ROUTER_COUNT = 4;
 
 function loadDlmPacketModule() {
     try {
@@ -50,13 +51,18 @@ async function startMockLakeServer(options = {}) {
         productFlag: Number.isInteger(options.productFlag) ? options.productFlag : DEFAULT_PRODUCT_FLAG,
         power: true,
         lastPreset: null,
+        routerCount: Number.isInteger(options.routerCount) ? options.routerCount : DEFAULT_ROUTER_COUNT,
         modules: {
             A: { mute: false, gain: 0.0 },
             B: { mute: false, gain: 0.0 },
             C: { mute: false, gain: 0.0 },
             D: { mute: false, gain: 0.0 },
         },
+        routers: {},
     };
+    for (let index = 1; index <= state.routerCount; index++) {
+        state.routers[index] = { forcePriority: 0 };
+    }
 
     const socket = dgram.createSocket('udp4');
     const runtime = {
@@ -195,6 +201,27 @@ function applyCommand(state, command) {
         return { type: 'ack', result: ACK_SUCCESS };
     }
 
+    match = command.match(/^Dev\.Router\.ForceInputPriority\?(\d+)$/);
+    if (match) {
+        const routerIndex = parseInt(match[1], 10);
+        const router = state.routers[routerIndex];
+        if (!router) {
+            return { type: 'response', payload: `ERR Unsupported ${command}` };
+        }
+        return { type: 'response', payload: `Dev.Router.ForceInputPriority=${routerIndex} ${router.forcePriority}` };
+    }
+
+    match = command.match(/^Dev\.Router\.ForceInputPriority=(\d+)\s+([0-4])$/);
+    if (match) {
+        const routerIndex = parseInt(match[1], 10);
+        const router = state.routers[routerIndex];
+        if (!router) {
+            return { type: 'ack', result: ACK_BAD_PARAM };
+        }
+        router.forcePriority = parseInt(match[2], 10);
+        return { type: 'ack', result: ACK_SUCCESS };
+    }
+
     if (command === 'Dev.FrameLabel?') {
         return { type: 'response', payload: `Dev.FrameLabel=${state.frameLabel}` };
     }
@@ -275,6 +302,8 @@ async function main() {
     const frameLabel = readArg(args, '--label') || 'Mock Lake Frame';
     const productArg = readArg(args, '--product');
     const productFlag = productArg ? Number(productArg) : DEFAULT_PRODUCT_FLAG;
+    const routerCountArg = readArg(args, '--router-count');
+    const routerCount = routerCountArg ? parseInt(routerCountArg, 10) : DEFAULT_ROUTER_COUNT;
     const verbose = !args.includes('--quiet');
 
     const server = await startMockLakeServer({
@@ -283,6 +312,7 @@ async function main() {
         frameId,
         frameLabel,
         productFlag,
+        routerCount,
         verbose,
         banner: true,
     });

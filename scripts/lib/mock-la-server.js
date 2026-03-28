@@ -1,7 +1,7 @@
 const http = require('http');
 const crypto = require('crypto');
 
-const P1_FAMILIES = ['ana', 'aes', 'avb', 'mon'];
+const P1_INPUT_FAMILIES = ['ana', 'aes', 'avb', 'mic'];
 
 function createMockLaServer(options = {}) {
     const host = options.host || '127.0.0.1';
@@ -82,7 +82,7 @@ function createMockLaServer(options = {}) {
             return;
         }
 
-        if (profile === 'p1' && handleP1Outputs(requestRecord)) {
+        if (profile === 'p1' && handleP1Inputs(requestRecord)) {
             return;
         }
 
@@ -158,46 +158,82 @@ function createMockLaServer(options = {}) {
             return false;
         }
 
-        function handleP1Outputs(record) {
-            const rootMatch = pathname.match(/^\/api\/output\/settings(?:\/(ana|aes|avb|mon)(?:\/(\d+)(?:\/(mute|gain))?)?)?$/);
-            if (!rootMatch) {
+        function handleP1Inputs(record) {
+            if (record.method === 'GET' && pathname === '/api/input/settings') {
+                complete(record, 200, state.inputSettings);
+                return true;
+            }
+
+            const indexedMatch = pathname.match(/^\/api\/input\/settings\/(ana|aes|avb|mic)(?:\/(\d+)(?:\/(mute|gain))?)?$/);
+            if (indexedMatch) {
+                const family = indexedMatch[1];
+                const index = indexedMatch[2] ? Number(indexedMatch[2]) : null;
+                const property = indexedMatch[3];
+
+                if (!P1_INPUT_FAMILIES.includes(family)) {
+                    complete(record, 404, { error: 'Input family not found' });
+                    return true;
+                }
+
+                const familyInputs = state.inputSettings[family] || [];
+
+                if (record.method === 'GET' && index === null) {
+                    complete(record, 200, familyInputs);
+                    return true;
+                }
+
+                const input = familyInputs[index - 1];
+                if (!input) {
+                    complete(record, 404, { error: 'Input not found' });
+                    return true;
+                }
+
+                if (record.method === 'GET' && !property) {
+                    complete(record, 200, input);
+                    return true;
+                }
+
+                if (record.method === 'GET' && property) {
+                    complete(record, 200, input[property]);
+                    return true;
+                }
+
+                if (record.method === 'POST' && property) {
+                    if (!['mute', 'gain'].includes(property)) {
+                        complete(record, 404, { error: 'Property not found' });
+                        return true;
+                    }
+                    if (property === 'mute') {
+                        input.mute = Boolean(body);
+                    } else {
+                        input.gain = Number(body);
+                    }
+                    complete(record, 200, input[property]);
+                    return true;
+                }
+
                 return false;
             }
 
-            const family = rootMatch[1];
-            const index = rootMatch[2] ? Number(rootMatch[2]) : null;
-            const property = rootMatch[3];
-
-            if (record.method === 'GET' && !family) {
-                complete(record, 200, state.outputSettings);
-                return true;
+            const mplMatch = pathname.match(/^\/api\/input\/settings\/mpl(?:\/(mute|gain))?$/);
+            if (!mplMatch) {
+                return false;
             }
 
-            if (!family || !P1_FAMILIES.includes(family)) {
-                complete(record, 404, { error: 'Output family not found' });
-                return true;
-            }
-
-            const familyOutputs = state.outputSettings[family] || [];
-
-            if (record.method === 'GET' && index === null) {
-                complete(record, 200, familyOutputs);
-                return true;
-            }
-
-            const output = familyOutputs[index - 1];
-            if (!output) {
-                complete(record, 404, { error: 'Output not found' });
+            const property = mplMatch[1];
+            const input = state.inputSettings.mpl;
+            if (!input) {
+                complete(record, 404, { error: 'MPL input not found' });
                 return true;
             }
 
             if (record.method === 'GET' && !property) {
-                complete(record, 200, output);
+                complete(record, 200, input);
                 return true;
             }
 
             if (record.method === 'GET' && property) {
-                complete(record, 200, output[property]);
+                complete(record, 200, input[property]);
                 return true;
             }
 
@@ -207,11 +243,11 @@ function createMockLaServer(options = {}) {
                     return true;
                 }
                 if (property === 'mute') {
-                    output.mute = Boolean(body);
+                    input.mute = Boolean(body);
                 } else {
-                    output.gain = Number(body);
+                    input.gain = Number(body);
                 }
-                complete(record, 200, output[property]);
+                complete(record, 200, input[property]);
                 return true;
             }
 
@@ -308,7 +344,7 @@ function createDefaultState(profile) {
             mac: '00:11:22:33:44:77',
             avdecc_entity_id: '0001020304050609',
         },
-        outputSettings: {
+        inputSettings: {
             ana: [
                 { name: 'Analog Left', mute: false, gain: -3.0 },
                 { name: 'Analog Right', mute: false, gain: -3.0 },
@@ -326,10 +362,11 @@ function createDefaultState(profile) {
                 mute: false,
                 gain: -1 * index,
             })),
-            mon: [
-                { name: 'Monitor A', mute: false, gain: -10.0 },
-                { name: 'Monitor B', mute: false, gain: -10.0 },
+            mic: [
+                { name: 'Mic 1', mute: false, gain: -12.0 },
+                { name: 'Mic 2', mute: false, gain: -12.0 },
             ],
+            mpl: { name: 'MPL Input', mute: false, gain: -9.0 },
         },
         configurationLibrary: createConfigurationLibrary(30, ['Show A', 'Show B', 'Show C']),
         activePresetIndex: 1,

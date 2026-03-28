@@ -1,20 +1,30 @@
 import { Action } from '../core/router';
 import { DeviceManager } from '../core/deviceManager';
 import { formatError } from '../core/errorUtils';
+import { BackendId } from '../core/types';
 import { IncomingEvent, KeyDownEvent, WillAppearEvent, WillDisappearEvent } from '../sd/events';
 import { SDClient } from '../sd/sdClient';
 
 const DOUBLE_PRESS_WINDOW_MS = 1200;
+
+interface PresetRecallActionOptions {
+    allowedBackend?: BackendId;
+    logPrefix?: string;
+}
 
 export class PresetRecallAction implements Action {
     private sdClient: SDClient;
     private deviceManager: DeviceManager;
     private lastPress = new Map<string, number>();
     private contextTargets = new Map<string, string>();
+    private allowedBackend?: BackendId;
+    private logPrefix: string;
 
-    constructor(sdClient: SDClient, deviceManager: DeviceManager) {
+    constructor(sdClient: SDClient, deviceManager: DeviceManager, options: PresetRecallActionOptions = {}) {
         this.sdClient = sdClient;
         this.deviceManager = deviceManager;
+        this.allowedBackend = options.allowedBackend;
+        this.logPrefix = options.logPrefix || 'Preset';
         this.deviceManager.on('deviceStateUpdated', (device, state) => {
             if (!state || state.activePresetIndex === undefined) return;
             for (const [context, targetId] of this.contextTargets.entries()) {
@@ -60,6 +70,9 @@ export class PresetRecallAction implements Action {
         const e = event as KeyDownEvent;
         const { targetId, requireDoublePress } = e.payload.settings;
         if (!targetId) return;
+        if (!this.isAllowedTarget(targetId, e.context)) {
+            return;
+        }
 
         if (requireDoublePress) {
             const last = this.lastPress.get(e.context) || 0;
@@ -77,7 +90,28 @@ export class PresetRecallAction implements Action {
             this.sdClient.showOk(e.context);
         } catch (error) {
             this.sdClient.showAlert(e.context);
-            this.sdClient.logMessage(`[Preset] Failed for ${targetId}: ${formatError(error)}`);
+            this.sdClient.logMessage(`[${this.logPrefix}] Failed for ${targetId}: ${formatError(error)}`);
         }
     }
+
+    private isAllowedTarget(targetId: string, context: string): boolean {
+        if (!this.allowedBackend) {
+            return true;
+        }
+
+        const target = this.deviceManager.getTarget(targetId);
+        if (!target || target.backend === this.allowedBackend) {
+            return true;
+        }
+
+        this.sdClient.showAlert(context);
+        this.sdClient.logMessage(
+            `[${this.logPrefix}] Target ${targetId} is not a ${formatBackendName(this.allowedBackend)} target.`
+        );
+        return false;
+    }
+}
+
+function formatBackendName(backend: BackendId): string {
+    return backend === 'la_http' ? 'L-Acoustics' : 'Lake';
 }

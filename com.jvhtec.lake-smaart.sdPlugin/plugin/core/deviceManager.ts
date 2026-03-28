@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
-import { Backend, DeviceDescriptor, DeviceState, LevelMode, TargetDescriptor, TargetState } from './types';
+import { Backend, DeviceDescriptor, DeviceState, InputPriorityMode, LevelMode, TargetDescriptor, TargetState } from './types';
 import { formatError } from './errorUtils';
 
-export type ActionKind = 'mute' | 'preset' | 'level';
+export type ActionKind = 'mute' | 'preset' | 'level' | 'priority';
 
 interface ActiveBinding {
     context: string;
@@ -223,6 +223,32 @@ export class DeviceManager extends EventEmitter {
         }
     }
 
+    public async setPriority(targetId: string, value: InputPriorityMode) {
+        const target = this.targets.get(targetId);
+        if (!target) {
+            const error = new Error(`Target ${targetId} is not available.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
+        const backend = this.backends.find((b) => b.id === target.backend);
+        if (!backend) {
+            const error = new Error(`Backend ${target.backend} is not registered for ${targetId}.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
+        if (!backend.setPriority) {
+            const error = new Error(`Backend ${target.backend} does not support priority control for ${targetId}.`);
+            this.emit('log', formatError(error));
+            throw error;
+        }
+        try {
+            await backend.setPriority(target, value);
+        } catch (error) {
+            this.emit('log', `Set priority failed for ${targetId}: ${formatError(error)}`);
+            throw error;
+        }
+    }
+
     public async recallPreset(targetId: string) {
         const target = this.targets.get(targetId);
         if (!target) {
@@ -260,7 +286,7 @@ export class DeviceManager extends EventEmitter {
         if (target.backend === 'lake') {
             return `${target.backend}:${target.deviceId}:${target.kind}:${target.id}`;
         }
-        const targetKey = target.kind === 'output' ? target.id : String(target.index);
+        const targetKey = target.kind === 'preset' ? String(target.index) : target.id;
         return `${target.backend}:${target.deviceId}:${target.kind}:${targetKey}`;
     }
 }

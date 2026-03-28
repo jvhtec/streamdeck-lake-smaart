@@ -4,8 +4,9 @@ import {
     asAmplifiedOutputs,
     asLaConfigurationLibrary,
     asLaDeviceInfo,
-    asP1OutputFamily,
-    asP1Outputs,
+    asP1InputFamily,
+    asP1Inputs,
+    asP1MplInput,
     buildLaConfigurationLoadBody,
     coerceBoolean,
     coerceNumber,
@@ -20,18 +21,18 @@ import {
     isRecallSuccessStatus,
     laActivePresetIndexPath,
     laAmplifiedOutputsPath,
+    laControlPropertyPath,
     laConfigurationLibraryPath,
     laConfigurationLoadPath,
     laInfoPath,
     LaConfigurationSlot,
     LaLogFn,
-    LaP1OutputFamily,
-    LaResolvedOutput,
-    laOutputPropertyPath,
-    laP1OutputSettingsPath,
+    LaP1IndexedInputFamily,
+    LaResolvedControlTarget,
+    laP1InputSettingsPath,
     laPresetNamePath,
     laPresetUsedPath,
-    pickResolvedOutput,
+    pickResolvedControlTarget,
 } from './laApi';
 
 export interface LaHttpSettings {
@@ -45,11 +46,11 @@ export interface LaHttpSettings {
 
 interface OutputSnapshotCacheEntry {
     timestamp: number;
-    outputs: LaResolvedOutput[] | null;
-    promise: Promise<LaResolvedOutput[]> | null;
+    outputs: LaResolvedControlTarget[] | null;
+    promise: Promise<LaResolvedControlTarget[]> | null;
 }
 
-const P1_OUTPUT_FAMILIES: LaP1OutputFamily[] = ['ana', 'aes', 'avb', 'mon'];
+const P1_INPUT_FAMILIES: LaP1IndexedInputFamily[] = ['ana', 'aes', 'avb', 'mic'];
 
 export class LaHttpBackend implements Backend {
     public readonly id = 'la_http' as const;
@@ -101,17 +102,18 @@ export class LaHttpBackend implements Backend {
                 targets.push({
                     backend: 'la_http',
                     deviceId: device.id,
-                    kind: 'output',
+                    kind: output.kind,
                     id: output.id,
                     index: output.index,
                     name: output.name,
                     supports: output.supports,
                     path: output.path,
                     profile,
+                    family: output.family,
                 });
             });
         } else {
-            this.logDebug(`${host} is LC16D; exposing configuration slots and skipping unsupported mute/level output targets.`);
+            this.logDebug(`${host} is LC16D; exposing configuration slots and skipping unsupported mute/level control targets.`);
         }
 
         const configurationLibrary = await this.readConfigurationLibrary(client, host, profile);
@@ -136,11 +138,11 @@ export class LaHttpBackend implements Backend {
             throw new Error('Invalid backend');
         }
         const host = this.getDeviceHost(target.deviceId);
-        if (target.kind === 'output') {
+        if (target.kind !== 'preset') {
             const outputs = await this.getOutputsSnapshot(host, target.profile);
-            const output = pickResolvedOutput(outputs, target.id);
+            const output = pickResolvedControlTarget(outputs, target.id);
             if (!output) {
-                throw new Error(`Output ${target.id} is missing from the device snapshot.`);
+                throw new Error(`Control target ${target.id} is missing from the device snapshot.`);
             }
             return {
                 online: true,
@@ -157,13 +159,13 @@ export class LaHttpBackend implements Backend {
     }
 
     public async setMute(target: TargetDescriptor, mute: boolean): Promise<void> {
-        if (target.backend !== 'la_http' || target.kind !== 'output') return;
+        if (target.backend !== 'la_http' || target.kind === 'preset') return;
         if (!target.supports.includes('mute')) {
             throw new Error(`Target ${target.name} does not support mute control.`);
         }
         const host = this.getDeviceHost(target.deviceId);
         const client = this.createClient(host);
-        const response = await this.withLimiter(host, () => client.post(laOutputPropertyPath(target.path, 'mute'), mute));
+        const response = await this.withLimiter(host, () => client.post(laControlPropertyPath(target.path, 'mute'), mute));
         if (!isPropertyWriteSuccessStatus(response.status)) {
             throw createUnexpectedStatusError(response, [200, 204]);
         }
@@ -171,7 +173,7 @@ export class LaHttpBackend implements Backend {
     }
 
     public async setLevel(target: TargetDescriptor, value: number, mode: LevelMode): Promise<void> {
-        if (target.backend !== 'la_http' || target.kind !== 'output') return;
+        if (target.backend !== 'la_http' || target.kind === 'preset') return;
         const host = this.getDeviceHost(target.deviceId);
         const client = this.createClient(host);
 
@@ -179,7 +181,7 @@ export class LaHttpBackend implements Backend {
             if (!target.supports.includes('volume')) {
                 throw new Error(`Target ${target.name} does not support volume control.`);
             }
-            const response = await this.withLimiter(host, () => client.post(laOutputPropertyPath(target.path, 'volume'), Math.round(value)));
+            const response = await this.withLimiter(host, () => client.post(laControlPropertyPath(target.path, 'volume'), Math.round(value)));
             if (!isPropertyWriteSuccessStatus(response.status)) {
                 throw createUnexpectedStatusError(response, [200, 204]);
             }
@@ -187,7 +189,7 @@ export class LaHttpBackend implements Backend {
             if (!target.supports.includes('level')) {
                 throw new Error(`Target ${target.name} does not support gain control.`);
             }
-            const response = await this.withLimiter(host, () => client.post(laOutputPropertyPath(target.path, 'gain'), value));
+            const response = await this.withLimiter(host, () => client.post(laControlPropertyPath(target.path, 'gain'), value));
             if (!isPropertyWriteSuccessStatus(response.status)) {
                 throw createUnexpectedStatusError(response, [200, 204]);
             }
@@ -297,24 +299,24 @@ export class LaHttpBackend implements Backend {
         return inferLaDeviceProfile(device.model || device.name);
     }
 
-    private async readOutputs(client: LaHttpClient, host: string, profile: LaHttpDeviceProfile): Promise<LaResolvedOutput[]> {
+    private async readOutputs(client: LaHttpClient, host: string, profile: LaHttpDeviceProfile): Promise<LaResolvedControlTarget[]> {
         if (profile === 'p1') {
-            return this.readP1Outputs(client, host);
+            return this.readP1Inputs(client, host);
         }
         if (profile === 'lc16d') {
             return [];
         }
         if (profile === 'unknown') {
             try {
-                return await this.readP1Outputs(client, host);
+                return await this.readP1Inputs(client, host);
             } catch (error) {
-                this.logDebug(`Unknown LA profile on ${host}; P1 output probe failed (${formatError(error)}), trying amplified outputs.`);
+                this.logDebug(`Unknown LA profile on ${host}; P1 input probe failed (${formatError(error)}), trying amplified outputs.`);
             }
         }
         return this.readAmplifiedOutputs(client, host);
     }
 
-    private async readAmplifiedOutputs(client: LaHttpClient, host: string): Promise<LaResolvedOutput[]> {
+    private async readAmplifiedOutputs(client: LaHttpClient, host: string): Promise<LaResolvedControlTarget[]> {
         const response = await this.withLimiter(host, () => client.get(laAmplifiedOutputsPath()));
         if (!isReadSuccessStatus(response.status)) {
             throw createUnexpectedStatusError(response, 200);
@@ -326,23 +328,23 @@ export class LaHttpBackend implements Backend {
         return outputs;
     }
 
-    private async readP1Outputs(client: LaHttpClient, host: string): Promise<LaResolvedOutput[]> {
-        const response = await this.withLimiter(host, () => client.get(laP1OutputSettingsPath()));
+    private async readP1Inputs(client: LaHttpClient, host: string): Promise<LaResolvedControlTarget[]> {
+        const response = await this.withLimiter(host, () => client.get(laP1InputSettingsPath()));
         if (isReadSuccessStatus(response.status)) {
-            const outputs = asP1Outputs(response.data);
+            const outputs = asP1Inputs(response.data);
             if (outputs) {
                 return outputs;
             }
-            this.logDebug(`${host} returned an unexpected /api/output/settings payload; falling back to per-family reads.`);
+            this.logDebug(`${host} returned an unexpected /api/input/settings payload; falling back to per-family reads.`);
         } else if (response.status !== 404) {
             throw createUnexpectedStatusError(response, 200);
         } else {
-            this.logDebug(`${host} returned 404 for /api/output/settings; falling back to per-family reads.`);
+            this.logDebug(`${host} returned 404 for /api/input/settings; falling back to per-family reads.`);
         }
 
-        const outputs: LaResolvedOutput[] = [];
-        for (const family of P1_OUTPUT_FAMILIES) {
-            const familyPath = laP1OutputSettingsPath(family);
+        const outputs: LaResolvedControlTarget[] = [];
+        for (const family of P1_INPUT_FAMILIES) {
+            const familyPath = laP1InputSettingsPath(family);
             const familyResponse = await this.withLimiter(host, () => client.get(familyPath));
             if (familyResponse.status === 404) {
                 continue;
@@ -350,15 +352,27 @@ export class LaHttpBackend implements Backend {
             if (!isReadSuccessStatus(familyResponse.status)) {
                 throw createUnexpectedStatusError(familyResponse, 200);
             }
-            const familyOutputs = asP1OutputFamily(family, familyResponse.data);
+            const familyOutputs = asP1InputFamily(family, familyResponse.data);
             if (!familyOutputs) {
-                throw createInvalidPayloadError(familyResponse, `Expected an array of ${family.toUpperCase()} output objects.`);
+                throw createInvalidPayloadError(familyResponse, `Expected an array of ${family.toUpperCase()} input objects.`);
             }
             outputs.push(...familyOutputs);
         }
 
+        const mplResponse = await this.withLimiter(host, () => client.get(laP1InputSettingsPath('mpl')));
+        if (mplResponse.status !== 404) {
+            if (!isReadSuccessStatus(mplResponse.status)) {
+                throw createUnexpectedStatusError(mplResponse, 200);
+            }
+            const mplInput = asP1MplInput(mplResponse.data);
+            if (!mplInput) {
+                throw createInvalidPayloadError(mplResponse, 'Expected an MPL input control object.');
+            }
+            outputs.push(mplInput);
+        }
+
         if (outputs.length === 0) {
-            throw new Error('No P1 output settings were returned by /api/output/settings.');
+            throw new Error('No P1 input settings were returned by /api/input/settings.');
         }
 
         return outputs;
@@ -420,7 +434,7 @@ export class LaHttpBackend implements Backend {
         return slots;
     }
 
-    private async getOutputsSnapshot(host: string, profile: LaHttpDeviceProfile): Promise<LaResolvedOutput[]> {
+    private async getOutputsSnapshot(host: string, profile: LaHttpDeviceProfile): Promise<LaResolvedControlTarget[]> {
         const existing = this.outputSnapshots.get(host);
         const now = Date.now();
         if (existing?.outputs && now - existing.timestamp < this.outputSnapshotTtlMs) {

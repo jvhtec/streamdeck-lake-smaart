@@ -28,7 +28,38 @@
         </div>
 
         <div id="smaartControls" style="display:none;">
-            <div class="sdpi-item-message">Rotate to adjust Smaart generator gain. Press the dial to toggle the generator on or off.</div>
+            <div class="sdpi-item-message" id="smaartActionMessage">Rotate to adjust Smaart generator gain. Press the dial to toggle the generator on or off.</div>
+            <div id="smaartFileTransportOptions" style="display:none;">
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Window Title</div>
+                    <input class="sdpi-item-value" type="text" id="windowTitle" placeholder="Smaart" onchange="saveSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Focus Window</div>
+                    <input class="sdpi-item-value" type="checkbox" id="activateWindow" onchange="saveSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Focus Delay (ms)</div>
+                    <input class="sdpi-item-value" type="number" id="focusDelayMs" min="0" onchange="saveSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Step Delay (ms)</div>
+                    <input class="sdpi-item-value" type="number" id="betweenStepDelayMs" min="0" onchange="saveSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Previous Macro</div>
+                    <input class="sdpi-item-value" type="text" id="previousMacro" placeholder="Ctrl+Shift+Left" onchange="saveSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Next Macro</div>
+                    <input class="sdpi-item-value" type="text" id="nextMacro" placeholder="Ctrl+Shift+Right" onchange="saveSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Press Macro</div>
+                    <input class="sdpi-item-value" type="text" id="pressMacro" placeholder="Space" onchange="saveSettings()">
+                </div>
+                <div class="sdpi-item-message">Macro format: <code>Ctrl+Alt+P</code> or multi-step like <code>Ctrl+1, Delay 100, Space</code>.</div>
+            </div>
         </div>
 
         <div class="sdpi-heading" id="actionOptionsHeading">Level Options</div>
@@ -56,45 +87,49 @@
 
         <div class="sdpi-heading">Global Discovery Settings</div>
         <div id="lakeGlobalSettings">
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Device Filter</div>
-                <input class="sdpi-item-value" type="text" id="lakeHost" placeholder="Optional device IP or frame ID" onchange="saveGlobalSettings()">
+            <div id="lakeBackendSettings">
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Lake Device Filter</div>
+                    <input class="sdpi-item-value" type="text" id="lakeHost" placeholder="Optional device IP or frame ID" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Lake Port</div>
+                    <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Lake Adapter IP</div>
+                    <select class="sdpi-item-value select" id="lakeBindAddress" onchange="saveGlobalSettings()"></select>
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Lake Debug Log</div>
+                    <input class="sdpi-item-value" type="checkbox" id="lakeDebug" onchange="saveGlobalSettings()">
+                </div>
             </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Port</div>
-                <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Adapter IP</div>
-                <select class="sdpi-item-value select" id="lakeBindAddress" onchange="saveGlobalSettings()"></select>
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Debug Log</div>
-                <input class="sdpi-item-value" type="checkbox" id="lakeDebug" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">LA Adapter IP</div>
-                <select class="sdpi-item-value select" id="laBindAddress" onchange="saveGlobalSettings()"></select>
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">L-Acoustics Subnet</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="Auto from LA adapter" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">L-Acoustics Hosts</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.1.20,192.168.1.21" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">HTTP User</div>
-                <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">HTTP Pass</div>
-                <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">LA Debug Log</div>
-                <input class="sdpi-item-value" type="checkbox" id="laDebugLogging" onchange="saveGlobalSettings()">
+            <div id="laBackendSettings">
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">LA Adapter IP</div>
+                    <select class="sdpi-item-value select" id="laBindAddress" onchange="saveGlobalSettings()"></select>
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">L-Acoustics Subnet</div>
+                    <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="Auto from LA adapter" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">L-Acoustics Hosts</div>
+                    <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.1.20,192.168.1.21" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">HTTP User</div>
+                    <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">HTTP Pass</div>
+                    <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">LA Debug Log</div>
+                    <input class="sdpi-item-value" type="checkbox" id="laDebugLogging" onchange="saveGlobalSettings()">
+                </div>
             </div>
         </div>
         <div id="smaartGlobalSettings" style="display:none;">
@@ -133,11 +168,41 @@ function isSmaartGeneratorGainAction() {
     return getActionName() === 'smaartgengain';
 }
 
+function isSmaartFileTransportAction() {
+    return getActionName() === 'smaartfiletransport';
+}
+
+function usesSmaartApiGlobalSettings() {
+    return isSmaartAction() && !isSmaartFileTransportAction();
+}
+
 function getRequiredCatalogAction() {
     if (isSmaartAction()) {
         return null;
     }
     return 'level';
+}
+
+function getRequiredBackend() {
+    const name = getActionName();
+    if (name === 'lakeLevel' || name === 'priority') {
+        return 'lake';
+    }
+    if (name === 'laLevel') {
+        return 'la_http';
+    }
+    return null;
+}
+
+function getRequiredBackend() {
+    const name = getActionName();
+    if (name === 'lakeLevel' || name === 'priority') {
+        return 'lake';
+    }
+    if (name === 'laLevel') {
+        return 'la_http';
+    }
+    return null;
 }
 
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
@@ -328,28 +393,54 @@ function updateLakeAdapterOptions(selectedAddress) {
 function updateUI() {
     const isSmaart = isSmaartAction();
     const isSmaartGain = isSmaartGeneratorGainAction();
+    const isSmaartFileTransport = isSmaartFileTransportAction();
+    const requiredBackend = getRequiredBackend();
 
     const targetControls = document.getElementById('targetControls');
     const smaartControls = document.getElementById('smaartControls');
+    const smaartActionMessage = document.getElementById('smaartActionMessage');
+    const smaartFileTransportOptions = document.getElementById('smaartFileTransportOptions');
+    const dialOptions = document.getElementById('dialOptions');
     const levelModeRow = document.getElementById('levelModeRow');
     const actionOptionsHeading = document.getElementById('actionOptionsHeading');
     const stepSizeLabel = document.getElementById('stepSizeLabel');
     const minLevelLabel = document.getElementById('minLevelLabel');
     const maxLevelLabel = document.getElementById('maxLevelLabel');
     const lakeGlobalSettings = document.getElementById('lakeGlobalSettings');
+    const lakeBackendSettings = document.getElementById('lakeBackendSettings');
+    const laBackendSettings = document.getElementById('laBackendSettings');
     const smaartGlobalSettings = document.getElementById('smaartGlobalSettings');
 
     if (targetControls) {
         targetControls.style.display = isSmaart ? 'none' : 'block';
     }
     if (smaartControls) {
-        smaartControls.style.display = isSmaartGain ? 'block' : 'none';
+        smaartControls.style.display = isSmaart ? 'block' : 'none';
+    }
+    if (smaartActionMessage) {
+        smaartActionMessage.textContent = isSmaartFileTransport
+            ? 'Rotate to send your Previous/Next macros. Press the dial to send the play or pause macro.'
+            : 'Rotate to adjust Smaart generator gain. Press the dial to toggle the generator on or off.';
+    }
+    if (smaartFileTransportOptions) {
+        smaartFileTransportOptions.style.display = isSmaartFileTransport ? 'block' : 'none';
+    }
+    if (dialOptions) {
+        dialOptions.style.display = isSmaartFileTransport ? 'none' : 'block';
     }
     if (levelModeRow) {
         levelModeRow.style.display = isSmaart ? 'none' : 'flex';
     }
     if (actionOptionsHeading) {
-        actionOptionsHeading.textContent = isSmaartGain ? 'Generator Gain Options' : 'Level Options';
+        actionOptionsHeading.textContent = isSmaartFileTransport
+            ? 'File Transport Options'
+            : isSmaartGain
+                ? 'Generator Gain Options'
+                : requiredBackend === 'lake'
+                    ? 'Lake Level Options'
+                    : requiredBackend === 'la_http'
+                        ? 'L-Acoustics Level Options'
+                        : 'Level Options';
     }
     if (stepSizeLabel) {
         stepSizeLabel.textContent = isSmaartGain ? 'Step Size (dB)' : 'Step Size';
@@ -363,8 +454,14 @@ function updateUI() {
     if (lakeGlobalSettings) {
         lakeGlobalSettings.style.display = isSmaart ? 'none' : 'block';
     }
+    if (lakeBackendSettings) {
+        lakeBackendSettings.style.display = !isSmaart && requiredBackend !== 'la_http' ? 'block' : 'none';
+    }
+    if (laBackendSettings) {
+        laBackendSettings.style.display = !isSmaart && requiredBackend !== 'lake' ? 'block' : 'none';
+    }
     if (smaartGlobalSettings) {
-        smaartGlobalSettings.style.display = isSmaart ? 'block' : 'none';
+        smaartGlobalSettings.style.display = usesSmaartApiGlobalSettings() ? 'block' : 'none';
     }
 
     syncLevelModeOptions();
@@ -439,7 +536,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
         const option = document.createElement('option');
         const id = target.backend === 'lake'
             ? `${target.backend}:${target.deviceId}:${target.kind}:${target.id}`
-            : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'output' ? target.id : target.index}`;
+            : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'preset' ? target.index : target.id}`;
         option.value = id;
         option.textContent = target.name;
         targetSelect.appendChild(option);
@@ -456,7 +553,9 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
 function deviceSupportsRequiredAction(device) {
     const requiredAction = getRequiredCatalogAction();
+    const requiredBackend = getRequiredBackend();
     if (!requiredAction) return true;
+    if (requiredBackend && device.backend !== requiredBackend) return false;
 
     if (Array.isArray(device.supportedActions) && device.supportedActions.length > 0) {
         return device.supportedActions.includes(requiredAction);
@@ -466,13 +565,15 @@ function deviceSupportsRequiredAction(device) {
 }
 
 function isTargetSelectableForCurrentAction(target) {
+    const requiredBackend = getRequiredBackend();
+    if (requiredBackend && target.backend !== requiredBackend) return false;
     return target.supports && target.supports.includes('level');
 }
 
 function buildCatalogTargetId(target) {
     return target.backend === 'lake'
         ? `${target.backend}:${target.deviceId}:${target.kind}:${target.id}`
-        : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'output' ? target.id : target.index}`;
+        : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'preset' ? target.index : target.id}`;
 }
 
 function getSelectedCatalogTarget() {
@@ -483,7 +584,7 @@ function getSelectedCatalogTarget() {
         if (target.backend === 'lake') {
             return `${target.backend}:${target.deviceId}:${target.kind}:${target.id}` === selectedTargetId;
         }
-        const suffix = target.kind === 'output' ? target.id : target.index;
+        const suffix = target.kind === 'preset' ? target.index : target.id;
         return `${target.backend}:${target.deviceId}:${target.kind}:${suffix}` === selectedTargetId;
     }) || null;
 }

@@ -1,5 +1,7 @@
 export type BackendId = 'lake' | 'la_http';
 export type LaHttpDeviceProfile = 'p1' | 'lc16d' | 'amplified' | 'unknown';
+export type InputPriorityMode = 'auto' | '1' | '2' | '3' | '4';
+export type TargetSupport = 'mute' | 'level' | 'volume' | 'priority';
 
 export interface DeviceDescriptor {
     id: string;
@@ -14,21 +16,23 @@ export type TargetDescriptor =
     | {
           backend: 'lake';
           deviceId: string;
-          kind: 'module' | 'group' | 'preset';
+          kind: 'module' | 'group' | 'preset' | 'router';
           id: string;
           name: string;
-          supports?: Array<'mute' | 'level'>;
+          supports?: TargetSupport[];
+          routerIndex?: number;
       }
     | {
           backend: 'la_http';
           deviceId: string;
-          kind: 'output';
+          kind: 'input' | 'output';
           id: string;
-          index: number;
+          index?: number;
           name: string;
           supports: Array<'mute' | 'level' | 'volume'>;
           path: string;
           profile: LaHttpDeviceProfile;
+          family?: string;
       }
     | {
           backend: 'la_http';
@@ -44,6 +48,7 @@ export interface TargetState {
     mute?: boolean;
     levelDb?: number;
     volume?: number;
+    priorityMode?: InputPriorityMode;
     lastUpdatedMs: number;
 }
 
@@ -62,6 +67,7 @@ export interface Backend {
     getState(target: TargetDescriptor): Promise<TargetState>;
     setMute(target: TargetDescriptor, mute: boolean): Promise<void>;
     setLevel(target: TargetDescriptor, value: number, mode: LevelMode): Promise<void>;
+    setPriority?(target: TargetDescriptor, value: InputPriorityMode): Promise<void>;
     recallPreset(device: DeviceDescriptor, index: number): Promise<void>;
     getActivePresetIndex?(device: DeviceDescriptor): Promise<number | null>;
 }

@@ -2,9 +2,9 @@
     "UUID": "com.jvhtec.lake-smaart",
     "Actions": [
         {
-            "Icon": "images/icon_dial",
-            "Name": "Level + Press-to-Mute",
-            "UUID": "com.jvhtec.lake-smaart.level",
+            "Icon": "images/icon_lake_dial",
+            "Name": "Lake Level + Press-to-Mute",
+            "UUID": "com.jvhtec.lake-smaart.lakeLevel",
             "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
                 "Knob"
@@ -14,39 +14,111 @@
             },
             "States": [
                 {
-                    "Image": "images/icon_dial",
+                    "Image": "images/icon_lake_dial",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
             ]
         },
         {
-            "Icon": "images/icon_preset",
-            "Name": "Preset Recall",
-            "UUID": "com.jvhtec.lake-smaart.presetRecall",
-            "PropertyInspectorPath": "ui/key.html",
+            "Icon": "images/icon_la_dial",
+            "Name": "L-Acoustics Level + Press-to-Mute",
+            "UUID": "com.jvhtec.lake-smaart.laLevel",
+            "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
-                "Keypad"
+                "Knob"
             ],
+            "Encoder": {
+                "layout": "layouts/dialValue.json"
+            },
             "States": [
                 {
-                    "Image": "images/icon_preset",
+                    "Image": "images/icon_la_dial",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
             ]
         },
         {
-            "Icon": "images/icon_mute",
-            "Name": "Mute",
-            "UUID": "com.jvhtec.lake-smaart.mute",
+            "Icon": "images/icon_lake_preset",
+            "Name": "Lake Preset Recall",
+            "UUID": "com.jvhtec.lake-smaart.lakePresetRecall",
             "PropertyInspectorPath": "ui/key.html",
             "Controllers": [
                 "Keypad"
             ],
             "States": [
                 {
-                    "Image": "images/icon_mute",
+                    "Image": "images/icon_lake_preset",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_la_preset",
+            "Name": "L-Acoustics Preset Recall",
+            "UUID": "com.jvhtec.lake-smaart.laPresetRecall",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_la_preset",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_lake_mute",
+            "Name": "Lake Mute",
+            "UUID": "com.jvhtec.lake-smaart.lakeMute",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_lake_mute",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_la_mute",
+            "Name": "L-Acoustics Mute",
+            "UUID": "com.jvhtec.lake-smaart.laMute",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_la_mute",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/actionDefault",
+            "Name": "Lake Input Priority",
+            "UUID": "com.jvhtec.lake-smaart.priority",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/actionDefault",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                },
+                {
+                    "Image": "images/icon_on",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
@@ -71,6 +143,25 @@
                 },
                 {
                     "Image": "images/icon_smaart_gen_on",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
+            "Icon": "images/icon_smaart_gen",
+            "Name": "Smaart File Transport",
+            "UUID": "com.jvhtec.lake-smaart.smaartfiletransport",
+            "PropertyInspectorPath": "ui/dial.html",
+            "Controllers": [
+                "Knob"
+            ],
+            "Encoder": {
+                "layout": "layouts/dialValue.json"
+            },
+            "States": [
+                {
+                    "Image": "images/icon_smaart_gen",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }
@@ -173,7 +264,7 @@
     "Name": "Lake + L-Acoustics + Smaart Controller",
     "Icon": "images/pluginIcon",
     "URL": "https://jvhtec.com",
-    "Version": "1.2.0",
+    "Version": "1.2.3",
     "OS": [
         {
             "Platform": "mac"

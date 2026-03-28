@@ -1,17 +1,27 @@
 import { Action } from '../core/router';
 import { DeviceManager } from '../core/deviceManager';
 import { formatError } from '../core/errorUtils';
+import { BackendId } from '../core/types';
 import { IncomingEvent, DialDownEvent, DialRotateEvent, WillAppearEvent, WillDisappearEvent } from '../sd/events';
 import { SDClient } from '../sd/sdClient';
+
+interface LevelEncoderActionOptions {
+    allowedBackend?: BackendId;
+    logPrefix?: string;
+}
 
 export class LevelEncoderAction implements Action {
     private sdClient: SDClient;
     private deviceManager: DeviceManager;
     private contextTargets = new Map<string, string>();
+    private allowedBackend?: BackendId;
+    private logPrefix: string;
 
-    constructor(sdClient: SDClient, deviceManager: DeviceManager) {
+    constructor(sdClient: SDClient, deviceManager: DeviceManager, options: LevelEncoderActionOptions = {}) {
         this.sdClient = sdClient;
         this.deviceManager = deviceManager;
+        this.allowedBackend = options.allowedBackend;
+        this.logPrefix = options.logPrefix || 'Level';
         this.deviceManager.on('targetStateUpdated', (target, state) => {
             const targetId = this.deviceManager.getTargetId(target);
             for (const [context, mappedTargetId] of this.contextTargets.entries()) {
@@ -59,6 +69,9 @@ export class LevelEncoderAction implements Action {
         const e = event as DialRotateEvent;
         const { targetId, levelMode, stepSize, minLevel, maxLevel } = e.payload.settings;
         if (!targetId) return;
+        if (!this.isAllowedTarget(targetId, e.context)) {
+            return;
+        }
         const state = this.deviceManager.getTargetState(targetId);
         const current = levelMode === 'volume' ? state?.volume ?? 0 : state?.levelDb ?? 0;
         const step = Number(stepSize) || (levelMode === 'volume' ? 10 : 1);
@@ -76,7 +89,7 @@ export class LevelEncoderAction implements Action {
             this.updateFeedback(e.context, targetId, next, levelMode === 'volume');
         } catch (error) {
             this.sdClient.showAlert(e.context);
-            this.sdClient.logMessage(`[Level] Failed for ${targetId}: ${formatError(error)}`);
+            this.sdClient.logMessage(`[${this.logPrefix}] Failed for ${targetId}: ${formatError(error)}`);
         }
     }
 
@@ -85,6 +98,9 @@ export class LevelEncoderAction implements Action {
         const e = event as DialDownEvent;
         const { targetId } = e.payload.settings;
         if (!targetId) return;
+        if (!this.isAllowedTarget(targetId, e.context)) {
+            return;
+        }
         const current = this.deviceManager.getTargetState(targetId)?.mute;
         const next = current === undefined ? true : !current;
         try {
@@ -92,7 +108,7 @@ export class LevelEncoderAction implements Action {
             this.updateFeedback(e.context, targetId, undefined, false, next);
         } catch (error) {
             this.sdClient.showAlert(e.context);
-            this.sdClient.logMessage(`[Level] Failed for ${targetId}: ${formatError(error)}`);
+            this.sdClient.logMessage(`[${this.logPrefix}] Failed for ${targetId}: ${formatError(error)}`);
         }
     }
 
@@ -117,4 +133,25 @@ export class LevelEncoderAction implements Action {
             value: mute ? `MUTED` : display,
         });
     }
+
+    private isAllowedTarget(targetId: string, context: string): boolean {
+        if (!this.allowedBackend) {
+            return true;
+        }
+
+        const target = this.deviceManager.getTarget(targetId);
+        if (!target || target.backend === this.allowedBackend) {
+            return true;
+        }
+
+        this.sdClient.showAlert(context);
+        this.sdClient.logMessage(
+            `[${this.logPrefix}] Target ${targetId} is not a ${formatBackendName(this.allowedBackend)} target.`
+        );
+        return false;
+    }
+}
+
+function formatBackendName(backend: BackendId): string {
+    return backend === 'la_http' ? 'L-Acoustics' : 'Lake';
 }

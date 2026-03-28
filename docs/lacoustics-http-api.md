@@ -49,32 +49,35 @@ For this plugin:
 
 ## P1 endpoints relevant to this plugin
 
-### Writable output control
+### Writable input control
 
-P1 does **not** use `/api/control/dsp/output` for the main line outputs.
+For the plugin's required P1 workflow, the documented writable controls are on the input side under `/api/input/settings`.
 
-The writable output families are:
+The documented writable families are:
 
-- `/api/output/settings/ana/<i>/mute`
-- `/api/output/settings/ana/<i>/gain`
-- `/api/output/settings/aes/<i>/mute`
-- `/api/output/settings/aes/<i>/gain`
-- `/api/output/settings/avb/<i>/mute`
-- `/api/output/settings/avb/<i>/gain`
-- `/api/output/settings/mon/<i>/mute`
-- `/api/output/settings/mon/<i>/gain`
+- `/api/input/settings/ana/<i>/mute`
+- `/api/input/settings/ana/<i>/gain`
+- `/api/input/settings/aes/<i>/mute`
+- `/api/input/settings/aes/<i>/gain`
+- `/api/input/settings/avb/<i>/mute`
+- `/api/input/settings/avb/<i>/gain`
+- `/api/input/settings/mic/<i>/mute`
+- `/api/input/settings/mic/<i>/gain`
+- `/api/input/settings/mpl/mute`
+- `/api/input/settings/mpl/gain`
 
 Because object reads are supported, these aggregate reads are also valid:
 
-- `GET /api/output/settings`
-- `GET /api/output/settings/ana`
-- `GET /api/output/settings/aes`
-- `GET /api/output/settings/avb`
-- `GET /api/output/settings/mon`
+- `GET /api/input/settings`
+- `GET /api/input/settings/ana`
+- `GET /api/input/settings/aes`
+- `GET /api/input/settings/avb`
+- `GET /api/input/settings/mic`
+- `GET /api/input/settings/mpl`
 
 Observed plugin assumptions now aligned to the PDF:
 
-- P1 output control is `mute` + `gain`
+- P1 input control is `mute` + `gain`
 - no P1 `volume` path is documented in the P1 section
 
 ### Presets / configurations
@@ -160,8 +163,8 @@ Current plugin behavior should be built around these assumptions:
 
 - P1
   - discover with `/api/info`
-  - enumerate line outputs from `/api/output/settings`
-  - expose mute + gain targets across `ana`, `aes`, `avb`, and `mon`
+  - enumerate input targets from `/api/input/settings`
+  - expose mute + gain targets across `ana`, `aes`, `avb`, `mic`, and `mpl`
   - enumerate presets from `/api/configuration/library`
 - LC16D
   - discover with `/api/info`

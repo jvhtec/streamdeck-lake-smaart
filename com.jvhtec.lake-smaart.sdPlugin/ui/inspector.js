@@ -18,11 +18,27 @@ function isSmaartAction() {
 }
 
 function isMuteAction() {
-    return getActionName() === 'mute';
+    const name = getActionName();
+    return name === 'lakeMute' || name === 'laMute';
 }
 
 function isPresetAction() {
-    return getActionName() === 'presetRecall';
+    const name = getActionName();
+    return name === 'lakePresetRecall' || name === 'laPresetRecall';
+}
+
+function getRequiredBackend() {
+    const name = getActionName();
+    if (name === 'priority' || name === 'lakeMute' || name === 'lakeLevel') {
+        return 'lake';
+    }
+    if (name === 'lakePresetRecall') {
+        return 'lake';
+    }
+    if (name === 'laMute' || name === 'laLevel' || name === 'laPresetRecall') {
+        return 'la_http';
+    }
+    return null;
 }
 
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
@@ -70,7 +86,7 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
 function loadSettings(settings) {
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -85,7 +101,7 @@ function loadSettings(settings) {
 
 function loadGlobalSettings(settings) {
     lastGlobalSettings = Object.assign({}, settings);
-    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el && settings[field] !== undefined) {
@@ -103,7 +119,7 @@ function saveSettings() {
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -125,7 +141,7 @@ function saveSettings() {
 function saveGlobalSettings() {
     if (!websocket) return;
     const payload = Object.assign({}, lastGlobalSettings);
-    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el) {
@@ -183,9 +199,10 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     const devices = catalog.devices || [];
     const targets = catalog.targets || [];
+    const requiredBackend = getRequiredBackend();
 
     deviceSelect.innerHTML = '';
-    devices.forEach((device) => {
+    devices.filter((device) => !requiredBackend || device.backend === requiredBackend).forEach((device) => {
         const option = document.createElement('option');
         option.value = device.id;
         option.textContent = device.name;
@@ -205,6 +222,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     const filteredTargets = targets.filter((target) => {
         if (target.deviceId !== activeDevice) return false;
+        if (requiredBackend && target.backend !== requiredBackend) return false;
         if (isPresetAction()) return target.kind === 'preset';
         if (isMuteAction()) return target.supports && target.supports.includes('mute');
         return target.supports && target.supports.includes('level');
@@ -215,7 +233,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
         const option = document.createElement('option');
         const id = target.backend === 'lake'
             ? `${target.backend}:${target.deviceId}:${target.kind}:${target.id}`
-            : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'output' ? target.id : target.index}`;
+            : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'preset' ? target.index : target.id}`;
         option.value = id;
         option.textContent = target.name;
         targetSelect.appendChild(option);
@@ -236,7 +254,7 @@ function getSelectedCatalogTarget() {
         if (target.backend === 'lake') {
             return `${target.backend}:${target.deviceId}:${target.kind}:${target.id}` === selectedTargetId;
         }
-        const suffix = target.kind === 'output' ? target.id : target.index;
+        const suffix = target.kind === 'preset' ? target.index : target.id;
         return `${target.backend}:${target.deviceId}:${target.kind}:${suffix}` === selectedTargetId;
     }) || null;
 }

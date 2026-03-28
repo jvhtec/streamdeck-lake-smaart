@@ -12,18 +12,26 @@ The plugin must:
 
 - Auto-detect connected devices
 - Auto-detect suitable control targets
-- Expose exactly three action types
+- Expose backend-specific control actions without forcing operators to sort mixed Lake and L-Acoustics targets in the same inspector
 - Be state-aware
 - Degrade gracefully when devices are missing
 - Avoid per-rig reconfiguration wherever possible
 
 This is a control surface, not a system manager.
 
-## Action model (frozen)
+## Action model
 
-There are exactly three Stream Deck action types.
+The plugin surfaces dedicated control actions per backend where that improves clarity:
 
-### Button action: MUTE
+- `Lake Mute`
+- `L-Acoustics Mute`
+- `Lake Level + Press-to-Mute`
+- `L-Acoustics Level + Press-to-Mute`
+- `Lake Preset Recall`
+- `L-Acoustics Preset Recall`
+- `Lake Input Priority`
+
+### Button actions: MUTE
 
 **Purpose**
 
@@ -37,10 +45,10 @@ Toggle mute on a selected target.
 **Supported targets**
 
 - Lake LM: module or group mute
-- P1: output mute on documented `ana` / `aes` / `avb` / `mon` output families
+- P1: input mute on documented `ana` / `aes` / `avb` / `mic` families plus `mpl`
 - LC16D: no mute targets until a documented writable path is confirmed
 
-### Button action: PRESET RECALL
+### Button actions: PRESET RECALL
 
 **Purpose**
 
@@ -53,11 +61,10 @@ Recall a predefined configuration/preset on the target device.
 
 **Supported targets**
 
-- Lake LM: Lake preset/module recall
-- P1: configuration slot recall (1–30)
-- LC16D: configuration slot recall (1–10)
+- Lake Preset Recall: Lake preset/module recall
+- L-Acoustics Preset Recall: P1 configuration slot recall (1–30) and LC16D configuration slot recall (1–10)
 
-### Encoder action: LEVEL + PRESS-TO-MUTE
+### Encoder actions: LEVEL + PRESS-TO-MUTE
 
 **Purpose**
 
@@ -73,7 +80,7 @@ Primary continuous control.
 
 - Lake LM: module/group gain + mute
 - P1:
-  - Gain in dB (-60 … +15) on documented output families
+  - Gain in dB (-60 … +15) on documented input settings families
 - LC16D:
   - no encoder targets until a documented writable mute/gain path is confirmed
 
@@ -116,9 +123,9 @@ type Target =
   | {
       backend: "la_http";
       deviceId: string;
-      kind: "output";
+      kind: "input" | "output";
       id: string;
-      index: number;
+      index?: number;
       path: string;
       supports: ["mute", "level"];
     }
@@ -134,7 +141,7 @@ This allows:
 
 - auto-population of inspector dropdowns
 - consistent state polling
-- backend-agnostic actions
+- backend-scoped actions that still share one target/state model
 
 ## Auto-detection and discovery
 
@@ -163,16 +170,17 @@ Once a device is known, build a Target Catalog.
 
 **P1 targets**
 
-Outputs
+Inputs
 
-- `GET /api/output/settings`
-- Output families are `ana`, `aes`, `avb`, and `mon`
-- Each family member becomes a `kind: "output"` target with a stable family-aware ID such as `ana:1`
+- `GET /api/input/settings`
+- Input families are `ana`, `aes`, `avb`, `mic`, and `mpl`
+- Indexed families become `kind: "input"` targets with stable IDs such as `ana:1`
+- `mpl` becomes a single `kind: "input"` target with ID `mpl`
 
 Capabilities
 
-- P1 output targets expose `/mute` and `/gain`
-- P1 does not use `/api/control/dsp/output` for its main writable output family
+- P1 input targets expose `/mute` and `/gain`
+- P1 does not use `/api/control/dsp/output` for its documented input-side control family
 - Volume mode is not assumed for P1
 
 Presets
@@ -189,7 +197,7 @@ Presets
 - Only include used slots
 - Each becomes a `kind: "preset"` target
 
-Outputs
+Mute/level controls
 
 - Do not expose LC16D mute/level targets unless a documented writable control path is confirmed
 
@@ -213,6 +221,7 @@ The inspector is data-driven by the Target Catalog.
 - Device
 - Target (only targets with supports: mute)
 - Optional: momentary vs toggle (toggle default)
+- On backend-specific mute actions, only the relevant backend's devices and discovery fields are shown.
 
 ### Preset recall inspector
 
@@ -230,6 +239,7 @@ The inspector is data-driven by the Target Catalog.
 - Step size (coarse/fine)
 - Min/max clamp
 - Press action: mute toggle (fixed)
+- On backend-specific level actions, only the relevant backend's devices and discovery fields are shown.
 
 ## State awareness and polling
 
@@ -245,8 +255,10 @@ The inspector is data-driven by the Target Catalog.
 
 **P1**
 
-- Mute: `/api/output/settings/<family>/<i>/mute`
-- Level: `/api/output/settings/<family>/<i>/gain`
+- Mute: `/api/input/settings/<family>/<i>/mute`
+- Level: `/api/input/settings/<family>/<i>/gain`
+- MPL mute: `/api/input/settings/mpl/mute`
+- MPL level: `/api/input/settings/mpl/gain`
 - Active preset: `/api/configuration/active/index`
 
 **LC16D**
@@ -277,14 +289,14 @@ The inspector is data-driven by the Target Catalog.
 ## Failure modes and fallback logic
 
 - If only P1 is present:
-  - Encoders map to P1 outputs
+  - Encoders map to P1 input targets
   - Presets map to P1 configs
 - If only LC16D is present:
   - Presets map to LC16D configs
-  - Encoder and mute actions remain unbound unless LC16D writable output control is confirmed
+  - Encoder and mute actions remain unbound unless LC16D writable control is confirmed
 - If both are present:
   - Presets default to P1
-  - Outputs default to LC16D
+  - Mute and encoder targets default to documented P1 inputs until LC16D writable control is confirmed
   - User can override per action
 - If no devices reachable:
   - Inspector shows “No devices found”

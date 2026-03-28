@@ -39,16 +39,16 @@ async function main() {
     console.log(`[la-smoke] Device: ${device.name}${device.model ? ` (${device.model})` : ''}`);
 
     const targets = await backend.getTargets(device);
-    const outputTargets = targets.filter((target) => target.kind === 'output');
+    const controlTargets = targets.filter((target) => target.kind !== 'preset');
     const presetTargets = targets.filter((target) => target.kind === 'preset');
 
-    console.log(`[la-smoke] Outputs discovered: ${outputTargets.length}`);
+    console.log(`[la-smoke] Control targets discovered: ${controlTargets.length}`);
     console.log(`[la-smoke] Presets discovered: ${presetTargets.length}`);
 
     const activePresetIndex = await backend.getActivePresetIndex(device);
     console.log(`[la-smoke] Active preset index: ${activePresetIndex ?? 'unknown'}`);
 
-    for (const target of outputTargets.slice(0, Math.min(2, outputTargets.length))) {
+    for (const target of controlTargets.slice(0, Math.min(2, controlTargets.length))) {
         const state = await backend.getState(target);
         console.log(
             `[la-smoke] ${target.name}: mute=${state.mute ?? 'n/a'} gain=${state.levelDb ?? 'n/a'} volume=${state.volume ?? 'n/a'}`
@@ -60,10 +60,10 @@ async function main() {
         return;
     }
 
-    if (outputTargets.length === 0) {
-        console.log('[la-smoke] No writable output targets were discovered; skipping mute/gain write checks.');
+    if (controlTargets.length === 0) {
+        console.log('[la-smoke] No writable control targets were discovered; skipping mute/gain write checks.');
     } else {
-        const outputTarget = outputTargets[0];
+        const outputTarget = controlTargets[0];
         const initialState = await backend.getState(outputTarget);
         const initialMute = Boolean(initialState.mute);
         const initialGain = typeof initialState.levelDb === 'number' ? initialState.levelDb : 0;

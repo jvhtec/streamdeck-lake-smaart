@@ -2,8 +2,10 @@ import http from 'http';
 import type { LaHttpDeviceProfile } from '../core/types';
 
 export type LaLogFn = (message: string) => void;
-export type LaOutputSupport = 'mute' | 'level' | 'volume';
-export type LaP1OutputFamily = 'ana' | 'aes' | 'avb' | 'mon';
+export type LaControlSupport = 'mute' | 'level' | 'volume';
+export type LaP1IndexedInputFamily = 'ana' | 'aes' | 'avb' | 'mic';
+export type LaP1InputFamily = LaP1IndexedInputFamily | 'mpl';
+export type LaResolvedControlKind = 'input' | 'output';
 
 export interface LaRequestInfo {
     host: string;
@@ -59,7 +61,7 @@ export interface LaDeviceInfo {
     avdecc_entity_id?: string;
 }
 
-export interface LaOutputObject {
+export interface LaControlObject {
     name?: string;
     mute?: boolean;
     gain?: number;
@@ -73,23 +75,24 @@ export interface LaConfigurationSlot {
     name?: string;
 }
 
-export interface LaResolvedOutput {
+export interface LaResolvedControlTarget {
+    kind: LaResolvedControlKind;
     id: string;
-    index: number;
+    index?: number;
     name: string;
     path: string;
-    supports: LaOutputSupport[];
-    state: LaOutputObject;
+    supports: LaControlSupport[];
+    state: LaControlObject;
     family?: string;
 }
 
-const P1_OUTPUT_FAMILIES: LaP1OutputFamily[] = ['ana', 'aes', 'avb', 'mon'];
+const P1_INPUT_FAMILIES: LaP1InputFamily[] = ['ana', 'aes', 'avb', 'mic', 'mpl'];
 const AMPLIFIED_DEVICE_NAMES = ['LA1.16I', 'LA7.16', 'LA7.16I', 'LA12X', 'LA4X', 'LA2XI', 'LA8', 'LA4'];
-const P1_FAMILY_LABELS: Record<LaP1OutputFamily, string> = {
-    ana: 'Analog',
-    aes: 'AES',
-    avb: 'AVB',
-    mon: 'Monitor',
+const P1_INPUT_LABELS: Record<LaP1IndexedInputFamily, string> = {
+    ana: 'Analog Input',
+    aes: 'AES Input',
+    avb: 'AVB Input',
+    mic: 'Mic Input',
 };
 
 export function laInfoPath(): string {
@@ -104,18 +107,18 @@ export function laAmplifiedOutputPath(index: number): string {
     return `${laAmplifiedOutputsPath()}/${index}`;
 }
 
-export function laP1OutputSettingsPath(family?: LaP1OutputFamily, index?: number): string {
-    let path = '/api/output/settings';
+export function laP1InputSettingsPath(family?: LaP1InputFamily, index?: number): string {
+    let path = '/api/input/settings';
     if (family) {
         path += `/${family}`;
     }
-    if (typeof index === 'number') {
+    if (typeof index === 'number' && family && family !== 'mpl') {
         path += `/${index}`;
     }
     return path;
 }
 
-export function laOutputPropertyPath(basePath: string, property: 'mute' | 'gain' | 'volume'): string {
+export function laControlPropertyPath(basePath: string, property: 'mute' | 'gain' | 'volume'): string {
     return `${basePath}/${property}`;
 }
 
@@ -185,40 +188,40 @@ export function asLaDeviceInfo(value: unknown): LaDeviceInfo | null {
     return data;
 }
 
-export function asLaOutputs(value: unknown): LaOutputObject[] | null {
+export function asLaControls(value: unknown): LaControlObject[] | null {
     if (!Array.isArray(value)) return null;
 
-    const outputs: LaOutputObject[] = [];
+    const controls: LaControlObject[] = [];
     for (const item of value) {
-        const output = asLaOutput(item);
-        if (!output) {
+        const control = asLaControl(item);
+        if (!control) {
             return null;
         }
-        outputs.push(output);
+        controls.push(control);
     }
 
-    return outputs;
+    return controls;
 }
 
-export function asLaOutput(value: unknown): LaOutputObject | null {
+export function asLaControl(value: unknown): LaControlObject | null {
     if (!isRecord(value)) return null;
 
-    const output: LaOutputObject = { ...value };
+    const control: LaControlObject = { ...value };
     const mute = coerceBoolean(value.mute);
     const gain = coerceNumber(value.gain);
     const volume = coerceNumber(value.volume);
     const name = coerceString(value.name);
 
-    if (mute !== null) output.mute = mute;
-    if (gain !== null) output.gain = gain;
-    if (volume !== null) output.volume = volume;
-    if (name !== null) output.name = name;
+    if (mute !== null) control.mute = mute;
+    if (gain !== null) control.gain = gain;
+    if (volume !== null) control.volume = volume;
+    if (name !== null) control.name = name;
 
-    return output;
+    return control;
 }
 
-export function asAmplifiedOutputs(value: unknown): LaResolvedOutput[] | null {
-    const outputs = asLaOutputs(value);
+export function asAmplifiedOutputs(value: unknown): LaResolvedControlTarget[] | null {
+    const outputs = asLaControls(value);
     if (!outputs) {
         return null;
     }
@@ -226,57 +229,87 @@ export function asAmplifiedOutputs(value: unknown): LaResolvedOutput[] | null {
     return outputs.map((output, index) => {
         const resolvedIndex = index + 1;
         return {
+            kind: 'output',
             id: `dsp:${resolvedIndex}`,
             index: resolvedIndex,
-            name: formatOutputLabel('Output', resolvedIndex, coerceString(output.name)),
+            name: formatIndexedLabel('Output', resolvedIndex, coerceString(output.name)),
             path: laAmplifiedOutputPath(resolvedIndex),
-            supports: detectLaOutputSupports(output),
+            supports: detectLaControlSupports(output),
             state: output,
             family: 'dsp',
         };
     });
 }
 
-export function asP1Outputs(value: unknown): LaResolvedOutput[] | null {
+export function asP1Inputs(value: unknown): LaResolvedControlTarget[] | null {
     if (!isRecord(value)) {
         return null;
     }
 
-    const outputs: LaResolvedOutput[] = [];
-    for (const family of P1_OUTPUT_FAMILIES) {
+    const inputs: LaResolvedControlTarget[] = [];
+    for (const family of P1_INPUT_FAMILIES) {
         const familyValue = value[family];
         if (familyValue === undefined) {
             continue;
         }
-        const familyOutputs = asP1OutputFamily(family, familyValue);
-        if (!familyOutputs) {
+
+        if (family === 'mpl') {
+            const mplInput = asP1MplInput(familyValue);
+            if (!mplInput) {
+                return null;
+            }
+            inputs.push(mplInput);
+            continue;
+        }
+
+        const familyInputs = asP1InputFamily(family, familyValue);
+        if (!familyInputs) {
             return null;
         }
-        outputs.push(...familyOutputs);
+        inputs.push(...familyInputs);
     }
 
-    return outputs.length > 0 ? outputs : null;
+    return inputs.length > 0 ? inputs : null;
 }
 
-export function asP1OutputFamily(family: LaP1OutputFamily, value: unknown): LaResolvedOutput[] | null {
-    const outputs = asLaOutputs(value);
-    if (!outputs) {
+export function asP1InputFamily(family: LaP1IndexedInputFamily, value: unknown): LaResolvedControlTarget[] | null {
+    const inputs = asLaControls(value);
+    if (!inputs) {
         return null;
     }
 
-    return outputs.map((output, index) => {
+    return inputs.map((input, index) => {
         const resolvedIndex = index + 1;
-        const label = P1_FAMILY_LABELS[family];
+        const label = P1_INPUT_LABELS[family];
         return {
+            kind: 'input',
             id: `${family}:${resolvedIndex}`,
             index: resolvedIndex,
-            name: formatOutputLabel(label, resolvedIndex, coerceString(output.name)),
-            path: laP1OutputSettingsPath(family, resolvedIndex),
-            supports: detectLaOutputSupports(output),
-            state: output,
+            name: formatIndexedLabel(label, resolvedIndex, coerceString(input.name)),
+            path: laP1InputSettingsPath(family, resolvedIndex),
+            supports: detectLaControlSupports(input),
+            state: input,
             family,
         };
     });
+}
+
+export function asP1MplInput(value: unknown): LaResolvedControlTarget | null {
+    const input = asLaControl(value);
+    if (!input) {
+        return null;
+    }
+
+    return {
+        kind: 'input',
+        id: 'mpl',
+        index: 1,
+        name: formatSingleLabel('MPL Input', coerceString(input.name)),
+        path: laP1InputSettingsPath('mpl'),
+        supports: detectLaControlSupports(input),
+        state: input,
+        family: 'mpl',
+    };
 }
 
 export function asLaConfigurationLibrary(value: unknown): LaConfigurationSlot[] | null {
@@ -304,23 +337,23 @@ export function asLaConfigurationLibrary(value: unknown): LaConfigurationSlot[] 
     return slots;
 }
 
-export function pickResolvedOutput(outputs: LaResolvedOutput[], id: string): LaResolvedOutput | null {
-    return outputs.find((output) => output.id === id) || null;
+export function pickResolvedControlTarget(targets: LaResolvedControlTarget[], id: string): LaResolvedControlTarget | null {
+    return targets.find((target) => target.id === id) || null;
 }
 
-export function detectLaOutputSupports(output: LaOutputObject | null): LaOutputSupport[] {
-    if (!output) {
+export function detectLaControlSupports(control: LaControlObject | null): LaControlSupport[] {
+    if (!control) {
         return ['mute'];
     }
 
-    const supports: LaOutputSupport[] = [];
-    if (Object.prototype.hasOwnProperty.call(output, 'mute')) {
+    const supports: LaControlSupport[] = [];
+    if (Object.prototype.hasOwnProperty.call(control, 'mute')) {
         supports.push('mute');
     }
-    if (Object.prototype.hasOwnProperty.call(output, 'gain')) {
+    if (Object.prototype.hasOwnProperty.call(control, 'gain')) {
         supports.push('level');
     }
-    if (Object.prototype.hasOwnProperty.call(output, 'volume')) {
+    if (Object.prototype.hasOwnProperty.call(control, 'volume')) {
         supports.push('volume');
     }
 
@@ -415,12 +448,19 @@ export function formatError(error: unknown): string {
     return String(error);
 }
 
-function formatOutputLabel(prefix: string, index: number, customName: string | null): string {
+function formatIndexedLabel(prefix: string, index: number, customName: string | null): string {
     const base = `${prefix} ${index}`;
     if (!customName || customName.trim() === '' || customName.trim().toLowerCase() === base.toLowerCase()) {
         return base;
     }
     return `${base} - ${customName.trim()}`;
+}
+
+function formatSingleLabel(prefix: string, customName: string | null): string {
+    if (!customName || customName.trim() === '' || customName.trim().toLowerCase() === prefix.toLowerCase()) {
+        return prefix;
+    }
+    return `${prefix} - ${customName.trim()}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

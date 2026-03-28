@@ -6,6 +6,7 @@ import { LakeBackend } from './backends/lakeBackend';
 import { LaHttpBackend } from './backends/laHttpBackend';
 import { LevelEncoderAction } from './actions/levelEncoderAction';
 import { MuteAction } from './actions/muteAction';
+import { PriorityAction } from './actions/priorityAction';
 import { PresetRecallAction } from './actions/presetRecallAction';
 import { SmaartClient } from './smaart/smaartClient';
 import { KeySmaartGenAction } from './actions/keySmaartGen';
@@ -14,6 +15,7 @@ import { KeySmaartComputeDelayAction } from './actions/keySmaartComputeDelay';
 import { KeySmaartTraceToggleAction } from './actions/keySmaartTraceToggle';
 import { KeySmaartSplMeterAction } from './actions/keySmaartSplMeter';
 import { SmaartGeneratorGainDialAction } from './actions/smaartGeneratorGainDialAction';
+import { SmaartFileTransportDialAction } from './actions/smaartFileTransportDialAction';
 import { PiServer } from './piServer';
 import { deriveDiscoverySubnet, findIpv4AdapterByAddress, listIpv4Adapters } from './core/networkAdapters';
 import { buildInspectorDevices } from './core/inspectorCatalog';
@@ -174,10 +176,33 @@ function mapSmaartSplCatalog(response: any) {
     return { inputs, metrics };
 }
 
-router.registerAction('com.jvhtec.lake-smaart.level', new LevelEncoderAction(sdClient, deviceManager));
-router.registerAction('com.jvhtec.lake-smaart.mute', new MuteAction(sdClient, deviceManager));
-router.registerAction('com.jvhtec.lake-smaart.presetRecall', new PresetRecallAction(sdClient, deviceManager));
+router.registerAction('com.jvhtec.lake-smaart.lakeLevel', new LevelEncoderAction(sdClient, deviceManager, {
+    allowedBackend: 'lake',
+    logPrefix: 'Lake Level',
+}));
+router.registerAction('com.jvhtec.lake-smaart.laLevel', new LevelEncoderAction(sdClient, deviceManager, {
+    allowedBackend: 'la_http',
+    logPrefix: 'L-Acoustics Level',
+}));
+router.registerAction('com.jvhtec.lake-smaart.lakeMute', new MuteAction(sdClient, deviceManager, {
+    allowedBackend: 'lake',
+    logPrefix: 'Lake Mute',
+}));
+router.registerAction('com.jvhtec.lake-smaart.laMute', new MuteAction(sdClient, deviceManager, {
+    allowedBackend: 'la_http',
+    logPrefix: 'L-Acoustics Mute',
+}));
+router.registerAction('com.jvhtec.lake-smaart.priority', new PriorityAction(sdClient, deviceManager));
+router.registerAction('com.jvhtec.lake-smaart.lakePresetRecall', new PresetRecallAction(sdClient, deviceManager, {
+    allowedBackend: 'lake',
+    logPrefix: 'Lake Preset',
+}));
+router.registerAction('com.jvhtec.lake-smaart.laPresetRecall', new PresetRecallAction(sdClient, deviceManager, {
+    allowedBackend: 'la_http',
+    logPrefix: 'L-Acoustics Preset',
+}));
 router.registerAction('com.jvhtec.lake-smaart.smaartgengain', new SmaartGeneratorGainDialAction(sdClient, smaartClient));
+router.registerAction('com.jvhtec.lake-smaart.smaartfiletransport', new SmaartFileTransportDialAction(sdClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartgen', new KeySmaartGenAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartspl', new KeySmaartSplMeterAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartcapture', new KeySmaartCaptureAction(sdClient, smaartClient));
@@ -240,8 +265,10 @@ sdClient.onEvents((event) => {
         piServerReady.then(() => {
             if (!piServerPort) return;
             const isDialAction =
-                piEvent.action === 'com.jvhtec.lake-smaart.level' ||
-                piEvent.action === 'com.jvhtec.lake-smaart.smaartgengain';
+                piEvent.action === 'com.jvhtec.lake-smaart.lakeLevel' ||
+                piEvent.action === 'com.jvhtec.lake-smaart.laLevel' ||
+                piEvent.action === 'com.jvhtec.lake-smaart.smaartgengain' ||
+                piEvent.action === 'com.jvhtec.lake-smaart.smaartfiletransport';
             const page = isDialAction ? 'dial' : 'key';
             const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(piEvent.action)}&context=${encodeURIComponent(piEvent.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
             sdClient.openUrl(url);

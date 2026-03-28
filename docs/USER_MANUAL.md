@@ -2,7 +2,7 @@
 
 ## Overview
 
-This Stream Deck+ plugin provides control of Lake LM modules, L-Acoustics P1 output controls, L-Acoustics LC16D configuration recall, and Smaart utility actions directly from Stream Deck keys and dials. It supports mute toggles, level control with encoder press-to-mute, preset/configuration recall, and Smaart workflow shortcuts.
+This Stream Deck+ plugin provides control of Lake LM modules, Lake input router priorities, L-Acoustics P1 input controls, L-Acoustics LC16D configuration recall, and Smaart utility actions directly from Stream Deck keys and dials. It supports mute toggles, level control with encoder press-to-mute, input router priority forcing, preset/configuration recall, and Smaart workflow shortcuts.
 
 ## Requirements
 
@@ -38,7 +38,7 @@ The inspector also auto-refreshes after adapter and other global discovery chang
 
 ## Actions
 
-### Level + Press-to-Mute (Encoder)
+### Lake Level + Press-to-Mute (Encoder)
 
 - **Rotate**: Adjusts the selected target’s level.
 - **Press**: Toggles mute on the same target.
@@ -46,33 +46,82 @@ The inspector also auto-refreshes after adapter and other global discovery chang
 
 **Property inspector settings**
 
-- Device: Auto-detected Lake or L-Acoustics device with at least one valid level target on the selected NIC.
-- Target: Module/group (Lake) or output (L-Acoustics P1 / amplified controllers with documented output control).
+- Device: Auto-detected Lake device with at least one valid level target on the selected NIC.
+- Target: Lake module/group target.
 - Mode: Gain (dB) or Volume (only when the selected target supports it).
 - Step Size: Increment per tick.
 - Min/Max: Clamp values for safety.
 
-### Mute (Button)
+### L-Acoustics Level + Press-to-Mute (Encoder)
+
+- **Rotate**: Adjusts the selected target’s level.
+- **Press**: Toggles mute on the same target.
+- **Touch strip**: Shows target name, level value, and mute status.
+
+**Property inspector settings**
+
+- Device: Auto-detected L-Acoustics device with at least one valid level target on the selected NIC.
+- Target: P1 input target or amplified-controller output target.
+- Mode: Gain (dB) or Volume (only when the selected target supports it).
+- Step Size: Increment per tick.
+- Min/Max: Clamp values for safety.
+
+### Lake Mute (Button)
 
 - **Press**: Toggles mute on the selected target.
 - **Momentary**: Optional press-and-hold mute behavior.
 
 **Property inspector settings**
 
-- Device: Auto-detected Lake or L-Acoustics device with at least one valid mute target on the selected NIC.
-- Target: Module/group (Lake) or output (L-Acoustics targets that expose mute).
+- Device: Auto-detected Lake device with at least one valid mute target on the selected NIC.
+- Target: Lake module/group target.
 - Momentary: Enable to mute while the key is held.
 
-### Preset Recall (Button)
+### L-Acoustics Mute (Button)
+
+- **Press**: Toggles mute on the selected target.
+- **Momentary**: Optional press-and-hold mute behavior.
+
+**Property inspector settings**
+
+- Device: Auto-detected L-Acoustics device with at least one valid mute target on the selected NIC.
+- Target: P1 input target or amplified-controller output target that exposes mute.
+- Momentary: Enable to mute while the key is held.
+
+### Lake Preset Recall (Button)
 
 - **Press**: Recalls a preset/configuration.
 - **Double Press**: Optional safety confirmation.
 
 **Property inspector settings**
 
-- Device: Auto-detected Lake or L-Acoustics device with at least one valid preset/configuration target on the selected NIC.
-- Target: Preset slot (used slots are listed for L-Acoustics; P1 and LC16D configuration ranges differ by device).
+- Device: Auto-detected Lake device with at least one valid preset target on the selected NIC.
+- Target: Lake preset slot.
 - Double Press: Require a second press within ~1.2s.
+
+### L-Acoustics Preset Recall (Button)
+
+- **Press**: Recalls a preset/configuration.
+- **Double Press**: Optional safety confirmation.
+
+**Property inspector settings**
+
+- Device: Auto-detected L-Acoustics device with at least one valid preset/configuration target on the selected NIC.
+- Target: Used configuration slot on the selected P1 or LC16D device.
+- Double Press: Require a second press within ~1.2s.
+
+### Lake Input Priority (Button)
+
+- **Press**: Forces the selected Lake input router to the configured priority mode.
+- **State**: The key lights its active state when the selected router is already using that forced priority mode.
+
+**Property inspector settings**
+
+- Device: Auto-detected Lake device with at least one reachable input router on the selected NIC.
+- Target: Lake input router target discovered on that frame, such as `Router 1` or `Router 16`.
+- Trigger: `Fixed Priority` or `Push Count`.
+- Priority: Used in `Fixed Priority` mode for `Auto Select`, `Force Priority 1`, `Force Priority 2`, `Force Priority 3`, or `Force Priority 4`.
+- Push Count mode: One quick press selects `Priority 1`, two quick presses selects `Priority 2`, three selects `Priority 3`, and four selects `Priority 4`.
 
 ### Smaart Generator (Button)
 
@@ -82,6 +131,18 @@ The inspector also auto-refreshes after adapter and other global discovery chang
 
 - **Rotate**: Adjusts the Smaart signal generator gain in dB.
 - **Press**: Toggles the Smaart signal generator on or off.
+
+### Smaart File Transport (Dial)
+
+- **Rotate clockwise**: Sends the configured `Next Macro`.
+- **Rotate counterclockwise**: Sends the configured `Previous Macro`.
+- **Press**: Sends the configured `Press Macro`, typically play/pause.
+- Window Title: Visible Smaart window title text to focus before sending keys. Defaults to `Smaart`.
+- Focus Window: When enabled, the plugin activates the matching Smaart window before sending the macro.
+- Focus Delay: Wait time after focusing the Smaart window before the macro starts.
+- Step Delay: Delay between macro steps.
+- Macros: Each field accepts a hotkey like `Ctrl+Alt+P` or a short sequence like `Ctrl+1, Delay 100, Space`.
+- This action is Windows-only because it uses Windows hotkey injection instead of the Smaart API.
 
 ### Smaart SPL Meter (Button)
 

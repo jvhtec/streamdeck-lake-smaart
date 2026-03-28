@@ -37,9 +37,10 @@ If you want only the smoke runner's verbose output without npm's own verbose log
 
 - `GET /api/info`
 - P1 profile:
-  - `GET /api/output/settings`
-  - `GET /api/output/settings/<family>`
-  - `GET` / `POST` for output `mute` and `gain`
+  - `GET /api/input/settings`
+  - `GET /api/input/settings/<family>`
+  - `GET` / `POST` for input `mute` and `gain`
+  - `GET` / `POST` for `mpl` `mute` and `gain`
 - Amplified profile:
   - `GET /api/control/dsp/output`
   - `GET /api/control/dsp/output/<i>`
@@ -65,7 +66,7 @@ npm run la:smoke -- --host <device-ip> --user <user> --pass <pass> --verbose
 
 6. Confirm:
    - device discovery succeeds
-   - P1 output-family enumeration is correct, or LC16D exposes only preset targets as expected
+   - P1 input-target enumeration is correct, or LC16D exposes only preset targets as expected
    - preset library entries are listed correctly
    - active preset index reads correctly
    - Stream Deck logs show request path, HTTP status, and timing
@@ -85,6 +86,6 @@ npm run la:smoke -- --host <device-ip> --user <user> --pass <pass> --verbose --w
 
 - Discovery fails: verify routing, port `80`, credentials, and whether Digest auth is enabled.
 - Read-only smoke fails on `/api/info`: treat this as a basic connectivity or auth problem before checking deeper endpoints.
-- Output snapshot or preset reads fail: compare the failing path in the smoke output with Stream Deck logs from **LA Debug Log**.
+- Control-target snapshot or preset reads fail: compare the failing path in the smoke output with Stream Deck logs from **LA Debug Log**.
 - Write checks fail but reads succeed: capture the exact path/status pair from the logs; the plugin now treats those as hard failures instead of optimistic success.
 - Auth loops with `401` or `403`: confirm username/password and whether the device is sending a Digest challenge header.

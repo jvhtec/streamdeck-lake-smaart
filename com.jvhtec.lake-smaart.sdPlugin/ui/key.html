@@ -56,48 +56,69 @@
             <div class="sdpi-item-label">Double Press</div>
             <input class="sdpi-item-value" type="checkbox" id="requireDoublePress" onchange="saveSettings()">
         </div>
+        <div class="sdpi-item" id="priorityTriggerOptions" style="display:none;">
+            <div class="sdpi-item-label">Trigger</div>
+            <select class="sdpi-item-value select" id="priorityTriggerMode" onchange="saveSettings(); syncPriorityOptions();">
+                <option value="fixed">Fixed Priority</option>
+                <option value="push_count">Push Count</option>
+            </select>
+        </div>
+        <div class="sdpi-item" id="priorityOptions" style="display:none;">
+            <div class="sdpi-item-label">Priority</div>
+            <select class="sdpi-item-value select" id="priorityMode" onchange="saveSettings()">
+                <option value="auto">Auto Select</option>
+                <option value="1">Force Priority 1</option>
+                <option value="2">Force Priority 2</option>
+                <option value="3">Force Priority 3</option>
+                <option value="4">Force Priority 4</option>
+            </select>
+        </div>
 
         <div class="sdpi-heading">Global Discovery Settings</div>
         <div id="lakeGlobalSettings">
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Device Filter</div>
-                <input class="sdpi-item-value" type="text" id="lakeHost" placeholder="Optional device IP or frame ID" onchange="saveGlobalSettings()">
+            <div id="lakeBackendSettings">
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Lake Device Filter</div>
+                    <input class="sdpi-item-value" type="text" id="lakeHost" placeholder="Optional device IP or frame ID" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Lake Port</div>
+                    <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Lake Adapter IP</div>
+                    <select class="sdpi-item-value select" id="lakeBindAddress" onchange="saveGlobalSettings()"></select>
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">Lake Debug Log</div>
+                    <input class="sdpi-item-value" type="checkbox" id="lakeDebug" onchange="saveGlobalSettings()">
+                </div>
             </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Port</div>
-                <input class="sdpi-item-value" type="number" id="lakePort" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Adapter IP</div>
-                <select class="sdpi-item-value select" id="lakeBindAddress" onchange="saveGlobalSettings()"></select>
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">Lake Debug Log</div>
-                <input class="sdpi-item-value" type="checkbox" id="lakeDebug" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">LA Adapter IP</div>
-                <select class="sdpi-item-value select" id="laBindAddress" onchange="saveGlobalSettings()"></select>
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">L-Acoustics Subnet</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="Auto from LA adapter" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">L-Acoustics Hosts</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.1.20,192.168.1.21" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">HTTP User</div>
-                <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">HTTP Pass</div>
-                <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
-            </div>
-            <div class="sdpi-item">
-                <div class="sdpi-item-label">LA Debug Log</div>
-                <input class="sdpi-item-value" type="checkbox" id="laDebugLogging" onchange="saveGlobalSettings()">
+            <div id="laBackendSettings">
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">LA Adapter IP</div>
+                    <select class="sdpi-item-value select" id="laBindAddress" onchange="saveGlobalSettings()"></select>
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">L-Acoustics Subnet</div>
+                    <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="Auto from LA adapter" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">L-Acoustics Hosts</div>
+                    <input class="sdpi-item-value" type="text" id="laDiscoveryHosts" placeholder="192.168.1.20,192.168.1.21" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">HTTP User</div>
+                    <input class="sdpi-item-value" type="text" id="laAuthUser" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">HTTP Pass</div>
+                    <input class="sdpi-item-value" type="password" id="laAuthPass" onchange="saveGlobalSettings()">
+                </div>
+                <div class="sdpi-item">
+                    <div class="sdpi-item-label">LA Debug Log</div>
+                    <input class="sdpi-item-value" type="checkbox" id="laDebugLogging" onchange="saveGlobalSettings()">
+                </div>
             </div>
         </div>
         <div id="smaartGlobalSettings" style="display:none;">
@@ -140,11 +161,31 @@ function isSmaartSplAction() {
 }
 
 function isMuteAction() {
-    return getActionName() === 'mute';
+    const name = getActionName();
+    return name === 'lakeMute' || name === 'laMute';
 }
 
 function isPresetAction() {
-    return getActionName() === 'presetRecall';
+    const name = getActionName();
+    return name === 'lakePresetRecall' || name === 'laPresetRecall';
+}
+
+function isPriorityAction() {
+    return getActionName() === 'priority';
+}
+
+function getRequiredBackend() {
+    const name = getActionName();
+    if (name === 'priority' || name === 'lakeMute' || name === 'lakeLevel') {
+        return 'lake';
+    }
+    if (name === 'lakePresetRecall') {
+        return 'lake';
+    }
+    if (name === 'laMute' || name === 'laLevel' || name === 'laPresetRecall') {
+        return 'la_http';
+    }
+    return null;
 }
 
 function getRequiredCatalogAction() {
@@ -153,6 +194,9 @@ function getRequiredCatalogAction() {
     }
     if (isPresetAction()) {
         return 'preset';
+    }
+    if (isPriorityAction()) {
+        return 'priority';
     }
     if (isMuteAction()) {
         return 'mute';
@@ -374,18 +418,29 @@ function updateUI() {
 
     const muteOptions = document.getElementById('muteOptions');
     const presetOptions = document.getElementById('presetOptions');
+    const priorityTriggerOptions = document.getElementById('priorityTriggerOptions');
+    const priorityOptions = document.getElementById('priorityOptions');
     const targetControls = document.getElementById('targetControls');
     const smaartControls = document.getElementById('smaartControls');
     const smaartActionMessage = document.getElementById('smaartActionMessage');
     const smaartSplOptions = document.getElementById('smaartSplOptions');
     const lakeGlobalSettings = document.getElementById('lakeGlobalSettings');
+    const lakeBackendSettings = document.getElementById('lakeBackendSettings');
+    const laBackendSettings = document.getElementById('laBackendSettings');
     const smaartGlobalSettings = document.getElementById('smaartGlobalSettings');
+    const requiredBackend = getRequiredBackend();
 
     if (muteOptions) {
         muteOptions.style.display = isMuteAction() ? 'flex' : 'none';
     }
     if (presetOptions) {
         presetOptions.style.display = isPresetAction() ? 'flex' : 'none';
+    }
+    if (priorityTriggerOptions) {
+        priorityTriggerOptions.style.display = isPriorityAction() ? 'flex' : 'none';
+    }
+    if (priorityOptions) {
+        priorityOptions.style.display = isPriorityAction() ? 'flex' : 'none';
     }
     if (targetControls && smaartControls) {
         targetControls.style.display = isSmaart ? 'none' : 'block';
@@ -402,9 +457,17 @@ function updateUI() {
     if (lakeGlobalSettings) {
         lakeGlobalSettings.style.display = isSmaart ? 'none' : 'block';
     }
+    if (lakeBackendSettings) {
+        lakeBackendSettings.style.display = !isSmaart && requiredBackend !== 'la_http' ? 'block' : 'none';
+    }
+    if (laBackendSettings) {
+        laBackendSettings.style.display = !isSmaart && requiredBackend !== 'lake' ? 'block' : 'none';
+    }
     if (smaartGlobalSettings) {
         smaartGlobalSettings.style.display = isSmaart ? 'block' : 'none';
     }
+
+    syncPriorityOptions();
 }
 
 function requestCatalog() {
@@ -627,7 +690,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
         const option = document.createElement('option');
         const id = target.backend === 'lake'
             ? `${target.backend}:${target.deviceId}:${target.kind}:${target.id}`
-            : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'output' ? target.id : target.index}`;
+            : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'preset' ? target.index : target.id}`;
         option.value = id;
         option.textContent = target.name;
         targetSelect.appendChild(option);
@@ -642,7 +705,9 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
 function deviceSupportsRequiredAction(device) {
     const requiredAction = getRequiredCatalogAction();
+    const requiredBackend = getRequiredBackend();
     if (!requiredAction) return true;
+    if (requiredBackend && device.backend !== requiredBackend) return false;
 
     if (Array.isArray(device.supportedActions) && device.supportedActions.length > 0) {
         return device.supportedActions.includes(requiredAction);
@@ -652,7 +717,10 @@ function deviceSupportsRequiredAction(device) {
 }
 
 function isTargetSelectableForCurrentAction(target) {
+    const requiredBackend = getRequiredBackend();
+    if (requiredBackend && target.backend !== requiredBackend) return false;
     if (isPresetAction()) return target.kind === 'preset';
+    if (isPriorityAction()) return target.supports && target.supports.includes('priority');
     if (isMuteAction()) return target.supports && target.supports.includes('mute');
     return target.supports && target.supports.includes('level');
 }
@@ -660,7 +728,18 @@ function isTargetSelectableForCurrentAction(target) {
 function buildCatalogTargetId(target) {
     return target.backend === 'lake'
         ? `${target.backend}:${target.deviceId}:${target.kind}:${target.id}`
-        : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'output' ? target.id : target.index}`;
+        : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'preset' ? target.index : target.id}`;
+}
+
+function syncPriorityOptions() {
+    const triggerRow = document.getElementById('priorityTriggerOptions');
+    const priorityRow = document.getElementById('priorityOptions');
+    const triggerSelect = document.getElementById('priorityTriggerMode');
+    if (!triggerRow || !priorityRow || !triggerSelect) return;
+
+    const isPriority = isPriorityAction();
+    triggerRow.style.display = isPriority ? 'flex' : 'none';
+    priorityRow.style.display = isPriority && triggerSelect.value !== 'push_count' ? 'flex' : 'none';
 }
 
 function updateSmaartSplSelectors(selectedEndpoint, selectedMetric) {

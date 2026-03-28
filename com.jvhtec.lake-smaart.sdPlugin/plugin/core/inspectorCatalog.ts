@@ -1,12 +1,12 @@
 import { DeviceDescriptor, TargetDescriptor } from './types';
 
-export type InspectorActionKind = 'mute' | 'level' | 'preset';
+export type InspectorActionKind = 'mute' | 'level' | 'priority' | 'preset';
 
 export interface InspectorDeviceDescriptor extends DeviceDescriptor {
     supportedActions: InspectorActionKind[];
 }
 
-const ACTION_ORDER: InspectorActionKind[] = ['mute', 'level', 'preset'];
+const ACTION_ORDER: InspectorActionKind[] = ['mute', 'level', 'priority', 'preset'];
 
 export function buildInspectorDevices(
     devices: DeviceDescriptor[],
@@ -39,15 +39,25 @@ export function getSupportedActionsForTarget(target: TargetDescriptor): Inspecto
     }
 
     const actions: InspectorActionKind[] = [];
-    if (target.supports?.includes('mute')) {
+    if (hasSupport(target, 'mute')) {
         actions.push('mute');
     }
-    if (target.supports?.includes('level')) {
+    if (hasSupport(target, 'level')) {
         actions.push('level');
+    }
+    if (hasSupport(target, 'priority')) {
+        actions.push('priority');
     }
     return actions;
 }
 
 function sortActions(actions: InspectorActionKind[]): InspectorActionKind[] {
     return actions.sort((left, right) => ACTION_ORDER.indexOf(left) - ACTION_ORDER.indexOf(right));
+}
+
+function hasSupport(target: TargetDescriptor, support: InspectorActionKind) {
+    if (target.kind === 'preset') {
+        return false;
+    }
+    return Array.isArray(target.supports) && target.supports.includes(support as never);
 }

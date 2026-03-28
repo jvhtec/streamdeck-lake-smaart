@@ -1,6 +1,14 @@
-import { Backend, DeviceDescriptor, LevelMode, TargetDescriptor, TargetState } from '../core/types';
+import { Backend, DeviceDescriptor, InputPriorityMode, LevelMode, TargetDescriptor, TargetState } from '../core/types';
 import { DlmClient, DlmDiscoveredUnit } from '../lake/dlmClient';
-import { buildGetGain, buildGetMute, buildRecallPreset, buildSetGain, buildSetMute } from '../lake/dlmCommands';
+import {
+    buildGetForceInputPriority,
+    buildGetGain,
+    buildGetMute,
+    buildRecallPreset,
+    buildSetForceInputPriority,
+    buildSetGain,
+    buildSetMute,
+} from '../lake/dlmCommands';
 import { GROUPS, ModuleId } from '../lake/lakeModel';
 
 export interface LakeSettings {
@@ -14,10 +22,13 @@ export class LakeBackend implements Backend {
     public readonly id = 'lake' as const;
 
     private static readonly KNOWN_UNIT_TTL_MS = 30000;
+    private static readonly MAX_ROUTER_INDEX = 16;
 
     private client: DlmClient;
     private settings: LakeSettings;
     private unitsByDeviceId = new Map<string, DlmDiscoveredUnit>();
+    private routerIdsByDeviceId = new Map<string, number[]>();
+    private routerProbeInFlight = new Map<string, Promise<number[]>>();
 
     constructor(client: DlmClient, settings: LakeSettings) {
         this.client = client;
@@ -47,6 +58,8 @@ export class LakeBackend implements Backend {
             previousBindAddress !== this.settings.bindAddress
         ) {
             this.unitsByDeviceId.clear();
+            this.routerIdsByDeviceId.clear();
+            this.routerProbeInFlight.clear();
         }
     }
 
@@ -57,20 +70,35 @@ export class LakeBackend implements Backend {
             : this.client.getKnownUnits().filter((unit) => Date.now() - unit.lastSeenMs < LakeBackend.KNOWN_UNIT_TTL_MS);
 
         this.unitsByDeviceId.clear();
+        const nextDeviceIds = new Set<string>();
 
-        return units.map((unit) => {
+        const devices = units.map((unit) => {
             const deviceId = `lake:${unit.frameId}`;
+            nextDeviceIds.add(deviceId);
             this.unitsByDeviceId.set(deviceId, unit);
 
             return {
                 id: deviceId,
                 name: `${unit.model} (${unit.ip})`,
-                backend: 'lake',
+                backend: 'lake' as const,
                 address: unit.ip,
                 model: unit.model,
                 online: true,
             };
         });
+
+        for (const deviceId of Array.from(this.routerIdsByDeviceId.keys())) {
+            if (!nextDeviceIds.has(deviceId)) {
+                this.routerIdsByDeviceId.delete(deviceId);
+            }
+        }
+        for (const deviceId of Array.from(this.routerProbeInFlight.keys())) {
+            if (!nextDeviceIds.has(deviceId)) {
+                this.routerProbeInFlight.delete(deviceId);
+            }
+        }
+
+        return devices;
     }
 
     public async getTargets(device: DeviceDescriptor): Promise<TargetDescriptor[]> {
@@ -102,6 +130,22 @@ export class LakeBackend implements Backend {
                 kind: 'preset',
                 id: String(i),
                 name: `Preset ${i}`,
+            });
+        }
+
+        const unit = this.unitsByDeviceId.get(device.id) || this.client.getKnownUnits().find((knownUnit) => `lake:${knownUnit.frameId}` === device.id);
+        if (unit) {
+            const routerIds = await this.getRouterIds(device.id, unit);
+            routerIds.forEach((routerIndex) => {
+                targets.push({
+                    backend: 'lake',
+                    deviceId: device.id,
+                    kind: 'router',
+                    id: String(routerIndex),
+                    routerIndex,
+                    name: `Router ${routerIndex}`,
+                    supports: ['priority'],
+                });
             });
         }
 
@@ -143,6 +187,18 @@ export class LakeBackend implements Backend {
                 online: true,
                 mute: muteState,
                 levelDb: gainAverage,
+                lastUpdatedMs: Date.now(),
+            };
+        }
+
+        if (target.kind === 'router') {
+            const routerIndex = target.routerIndex ?? parseInt(target.id, 10);
+            const priorityMode = Number.isNaN(routerIndex)
+                ? null
+                : await this.readForceInputPriority(unit, routerIndex);
+            return {
+                online: true,
+                priorityMode: priorityMode ?? undefined,
                 lastUpdatedMs: Date.now(),
             };
         }
@@ -195,6 +251,24 @@ export class LakeBackend implements Backend {
         }
     }
 
+    public async setPriority(target: TargetDescriptor, value: InputPriorityMode): Promise<void> {
+        if (target.backend !== 'lake' || target.kind !== 'router') {
+            return;
+        }
+
+        const unit = this.getUnitForTarget(target);
+        if (!unit) {
+            throw new Error(`Lake unit not found for ${target.deviceId}`);
+        }
+
+        const routerIndex = target.routerIndex ?? parseInt(target.id, 10);
+        if (Number.isNaN(routerIndex) || routerIndex < 1) {
+            throw new Error(`Invalid Lake router target ${target.id}`);
+        }
+
+        await this.client.send(buildSetForceInputPriority(routerIndex, value), unit);
+    }
+
     public async recallPreset(device: DeviceDescriptor, index: number): Promise<void> {
         const unit = this.unitsByDeviceId.get(device.id);
         if (!unit) {
@@ -228,6 +302,72 @@ export class LakeBackend implements Backend {
         }
     }
 
+    private async readForceInputPriority(unit: DlmDiscoveredUnit, routerIndex: number): Promise<InputPriorityMode | null> {
+        try {
+            const response = await this.client.send(buildGetForceInputPriority(routerIndex), unit, 1, 1000);
+            if (!response) {
+                return null;
+            }
+            return parsePriorityPayload(response.payload);
+        } catch {
+            return null;
+        }
+    }
+
+    private async getRouterIds(deviceId: string, unit: DlmDiscoveredUnit): Promise<number[]> {
+        const cached = this.routerIdsByDeviceId.get(deviceId);
+        if (cached) {
+            return cached;
+        }
+
+        const pending = this.routerProbeInFlight.get(deviceId);
+        if (pending) {
+            return pending;
+        }
+
+        const probe = this.probeRouterIds(unit).finally(() => {
+            this.routerProbeInFlight.delete(deviceId);
+        });
+        this.routerProbeInFlight.set(deviceId, probe);
+
+        const routerIds = await probe;
+        this.routerIdsByDeviceId.set(deviceId, routerIds);
+        return routerIds;
+    }
+
+    private async probeRouterIds(unit: DlmDiscoveredUnit): Promise<number[]> {
+        const routerIds: number[] = [];
+        let consecutiveMisses = 0;
+
+        for (let routerIndex = 1; routerIndex <= LakeBackend.MAX_ROUTER_INDEX; routerIndex++) {
+            const priorityMode = await this.probeForceInputPriority(unit, routerIndex);
+            if (priorityMode) {
+                routerIds.push(routerIndex);
+                consecutiveMisses = 0;
+                continue;
+            }
+
+            consecutiveMisses++;
+            if (routerIds.length > 0 && consecutiveMisses >= 2) {
+                break;
+            }
+        }
+
+        return routerIds;
+    }
+
+    private async probeForceInputPriority(unit: DlmDiscoveredUnit, routerIndex: number): Promise<InputPriorityMode | null> {
+        try {
+            const response = await this.client.send(buildGetForceInputPriority(routerIndex), unit, 0, 250);
+            if (!response) {
+                return null;
+            }
+            return parsePriorityPayload(response.payload);
+        } catch {
+            return null;
+        }
+    }
+
     private getUnitForTarget(target: TargetDescriptor) {
         return this.unitsByDeviceId.get(target.deviceId) || this.client.getKnownUnits().find((unit) => `lake:${unit.frameId}` === target.deviceId);
     }
@@ -250,4 +390,39 @@ function parseGainPayload(payload: string): number | null {
 
     const value = parseFloat(match[0]);
     return Number.isNaN(value) ? null : value;
+}
+
+function parsePriorityPayload(payload: string): InputPriorityMode | null {
+    const normalized = payload.trim().toLowerCase();
+    if (!normalized) {
+        return null;
+    }
+
+    if (normalized.includes('auto')) {
+        return 'auto';
+    }
+
+    const match = normalized.match(/(-?\d+)(?!.*-?\d)/);
+    if (match) {
+        switch (match[1]) {
+            case '0':
+                return 'auto';
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+                return match[1];
+            default:
+                break;
+        }
+    }
+
+    if (normalized.includes('force')) {
+        if (normalized.includes('4')) return '4';
+        if (normalized.includes('3')) return '3';
+        if (normalized.includes('2')) return '2';
+        if (normalized.includes('1')) return '1';
+    }
+
+    return null;
 }
