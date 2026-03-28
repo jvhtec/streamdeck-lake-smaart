@@ -436,7 +436,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
         var option = document.createElement('option');
         var id = target.backend === 'lake'
             ? target.backend + ':' + target.deviceId + ':' + target.kind + ':' + target.id
-            : target.backend + ':' + target.deviceId + ':' + target.kind + ':' + target.index;
+            : target.backend + ':' + target.deviceId + ':' + target.kind + ':' + (target.kind === 'output' ? target.id : target.index);
         option.value = id;
         option.textContent = target.name;
         targetSelect.appendChild(option);
@@ -444,6 +444,38 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     if (selectedTargetId) {
         targetSelect.value = selectedTargetId;
+    }
+
+    syncLevelModeOptions();
+}
+
+function getSelectedCatalogTarget() {
+    var targetSelect = document.getElementById('targetId');
+    if (!targetSelect) return null;
+    var selectedTargetId = targetSelect.value;
+    return (catalog.targets || []).find(function(target) {
+        if (target.backend === 'lake') {
+            return target.backend + ':' + target.deviceId + ':' + target.kind + ':' + target.id === selectedTargetId;
+        }
+        var suffix = target.kind === 'output' ? target.id : target.index;
+        return target.backend + ':' + target.deviceId + ':' + target.kind + ':' + suffix === selectedTargetId;
+    }) || null;
+}
+
+function syncLevelModeOptions() {
+    var levelMode = document.getElementById('levelMode');
+    if (!levelMode) return;
+
+    var volumeOption = levelMode.querySelector('option[value="volume"]');
+    if (!volumeOption) return;
+
+    var target = getSelectedCatalogTarget();
+    var supportsVolume = Boolean(target && target.supports && target.supports.includes('volume'));
+    volumeOption.hidden = !supportsVolume;
+    volumeOption.disabled = !supportsVolume;
+
+    if (!supportsVolume && levelMode.value === 'volume') {
+        levelMode.value = 'gain';
     }
 }
 
@@ -713,6 +745,8 @@ function updateUI() {
     if (smaartGlobalSettings) {
         smaartGlobalSettings.style.display = isSmaart ? 'block' : 'none';
     }
+
+    syncLevelModeOptions();
 }
 ${buildScript('updateUI();')}
     </script>
