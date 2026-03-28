@@ -1,6 +1,6 @@
 # Lake + L-Acoustics + Smaart Stream Deck Plugin
 
-A Stream Deck+ plugin that connects to Lake LM modules, L-Acoustics P1/LC16D devices, and the Smaart API to provide fast control of mute, level, preset recall, and measurement utilities from Stream Deck keys and dials.
+A Stream Deck+ plugin that connects to Lake LM modules, L-Acoustics P1 / LC16D devices, and the Smaart API to provide fast control of mute, level, preset recall, and measurement utilities from Stream Deck keys and dials.
 
 ![Lake + L-Acoustics plugin icon](com.jvhtec.lake-smaart.sdPlugin/images/pluginIcon.png)
 
@@ -23,8 +23,8 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 ## Features
 
 - Control Lake LM module/group gain and mute with Stream Deck+ encoders.
-- Toggle mute on Lake LM modules/groups and L-Acoustics outputs.
-- Recall Lake and L-Acoustics presets/configurations from keys.
+- Toggle mute on Lake LM modules/groups and documented L-Acoustics output targets such as P1 output settings.
+- Recall Lake presets plus L-Acoustics configurations from keys.
 - Adjust Smaart generator gain from a dial and press the dial to toggle the generator on or off.
 - Display live Smaart SPL values on a key with inspector-based input and metric selection.
 - Trigger Smaart generator and measurement-focused actions for the currently active Smaart measurement.
@@ -35,9 +35,10 @@ Default discovery settings (overridable in Stream Deck global settings):
 
 - Lake device filter: optional device IP or frame ID, for example `169.254.23.45` or `3d000011:d6ed9201`
 - Lake port: `6016` by default for dynamic response mode
-- Lake adapter IP: optional local NIC address to bind on the Lake network when multiple adapters are active
+- Lake adapter IP: optional local NIC selection for binding Lake traffic when multiple adapters are active
 - Lake debug log: optional verbose DLM logging to the Stream Deck log
-- L-Acoustics discovery subnet: `192.168.1.0/24`
+- L-Acoustics adapter IP: optional local NIC address used for HTTP binding and auto-discovery subnet derivation
+- L-Acoustics discovery subnet: optional override, otherwise derived from the selected LA adapter
 - Optional explicit L-Acoustics hosts: `192.168.1.20,192.168.1.21`
 - Smaart host: `127.0.0.1` on port `26000`
 
@@ -89,8 +90,8 @@ For local Lake debugging without hardware, run `npm run lake:mock` and point the
 
 ## L-Acoustics verification
 
-- Start the local L-Acoustics mock server: `npm run la:mock -- --port 18080`
+- Start the local L-Acoustics mock server: `npm run la:mock -- --port 18080 --profile p1`
 - Run the read-only smoke pass: `npm run la:smoke -- --host 127.0.0.1:18080`
 - Run the automated LA regression suite: `npm run test:la`
 
-Add `--write-checks` to `npm run la:smoke -- --host <host>` when you explicitly want mute, gain, and preset recall writes exercised. For Monday hardware sessions, enable **LA Debug Log** in the property inspector first so Stream Deck logs include per-request path/status traces.
+Add `--profile lc16d` or `--profile amplified` to the mock when you want to emulate those families. Add `--bind <local-ip>` to the smoke runner when you need to force a specific NIC on a multi-homed machine. Add `--write-checks` to `npm run la:smoke -- --host <host>` when you explicitly want mute, gain, and preset recall writes exercised. For Monday hardware sessions, enable **LA Debug Log** in the property inspector first so Stream Deck logs include per-request path/status traces.

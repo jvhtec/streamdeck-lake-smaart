@@ -1,212 +1,171 @@
-# L-Acoustics Drive System HTTP API (v1.7)
+# L-Acoustics Drive System HTTP API Notes
 
-Relevant specification for Stream Deck control.
+Reference summary for this plugin, based on the local vendor PDF:
 
-Source: L-Acoustics Drive System HTTP API Guide – Technical Bulletin v1.7.
-Source URL: Provided offline by the client (no public URL). Retrieved 2025-09-27.
+- Source: `docs/L-Acoustics-HTTP-API-Guide-v1.7.pdf`
+- Document header inside the PDF: `TECHNICAL BULLETIN V1.8`
+- Source URL: offline client-provided PDF (no public URL in repo)
+- Retrieved from repo on: 2026-03-28
 
-## Supported devices (scope)
+## Common rules
 
-The HTTP API is exposed by the following L-Acoustics devices (firmware ≥ 2.13.0):
+- Transport: HTTP only
+- Port: `80`
+- Base URL: `http://<device-ip>/api/<endpoint>`
+- Max concurrent requests per device: `10`
+- Recommended minimum polling interval: `50 ms`
+- Auth: HTTP Digest
+- When auth is enabled, unauthenticated requests receive `403`
+
+The API is hierarchical JSON:
+
+- `GET` on an object or array returns all children
+- `GET` on a property returns the property value
+- `POST` updates writable properties
+- Invalid or read-only fields in a `POST` body are ignored
+
+That means object and array reads are valid optimization points for discovery and polling.
+
+## Discovery
+
+Use:
+
+- `GET /api/info`
+
+Important fields:
+
+- `/info/name`
+  - device model, for example `P1`, `LC16D`, `LA4X`
+- `/info/unit_name`
+  - operator-facing unit name
+- `/info/firmware_version`
+- `/info/serial`
+- `/info/mac`
+
+For this plugin:
+
+- use `name` to classify the device family
+- use `unit_name` as the preferred display label when present
+
+## P1 endpoints relevant to this plugin
+
+### Writable output control
+
+P1 does **not** use `/api/control/dsp/output` for the main line outputs.
+
+The writable output families are:
+
+- `/api/output/settings/ana/<i>/mute`
+- `/api/output/settings/ana/<i>/gain`
+- `/api/output/settings/aes/<i>/mute`
+- `/api/output/settings/aes/<i>/gain`
+- `/api/output/settings/avb/<i>/mute`
+- `/api/output/settings/avb/<i>/gain`
+- `/api/output/settings/mon/<i>/mute`
+- `/api/output/settings/mon/<i>/gain`
+
+Because object reads are supported, these aggregate reads are also valid:
+
+- `GET /api/output/settings`
+- `GET /api/output/settings/ana`
+- `GET /api/output/settings/aes`
+- `GET /api/output/settings/avb`
+- `GET /api/output/settings/mon`
+
+Observed plugin assumptions now aligned to the PDF:
+
+- P1 output control is `mute` + `gain`
+- no P1 `volume` path is documented in the P1 section
+
+### Presets / configurations
+
+- `GET /api/configuration/library`
+- `POST /api/configuration/load`
+- `GET /api/configuration/active/index`
+
+Ranges from the PDF:
+
+- library slots: `1..30`
+- active index: `0..30`
+
+### Metering
+
+Documented P1 level families include:
+
+- `/api/level/dsp/output/<i>/peak`
+- `/api/level/ana/output/<i>/peak`
+- `/api/level/aes/output/<i>/peak`
+- `/api/level/avb/output/<i>/peak`
+- `/api/level/mon/output/<i>/peak`
+
+The current plugin only needs mute/gain state for the Stream Deck actions, so metering stays optional.
+
+## LC16D endpoints relevant to this plugin
+
+### Configuration control
+
+LC16D clearly documents configuration management:
+
+- `GET /api/configuration/library`
+- `POST /api/configuration/load`
+- `GET /api/configuration/active/index`
+
+Ranges from the PDF:
+
+- library slots: `1..10`
+- active index: `0..10`
+
+### Levels and routing
+
+LC16D documents level monitoring and routing/status families such as:
+
+- `/api/level/aes/output/<i>/peak`
+- `/api/level/madi/output/<i>/peak`
+- AVB / AES67 / MADI stream mapping and status paths
+
+### Important limitation
+
+The LC16D section in the vendor PDF does **not** document the same writable output mute/gain family used by the old repo summary.
+
+For this plugin, that means:
+
+- LC16D is currently treated as configuration-recall capable
+- LC16D mute/level action targets are not exposed until a real writable control path is confirmed
+
+## Amplified controller note
+
+The `/api/control/dsp/output` family is documented for amplified controllers, not for P1 main outputs.
+
+Relevant paths include:
+
+- `GET /api/control/dsp/output`
+- `GET /api/control/dsp/output/<i>`
+- `/api/control/dsp/output/<i>/mute`
+- `/api/control/dsp/output/<i>/gain`
+- `/api/control/dsp/output/<i>/volume`
+
+The plugin still supports that family for amplified controllers, but it is no longer treated as the P1/LC16D baseline.
+
+## Configuration recall behavior
+
+- `POST /api/configuration/load`
+- action endpoint
+- expected response: HTTP `204`
+
+The plugin treats any other status as a failure.
+
+## Implementation summary
+
+Current plugin behavior should be built around these assumptions:
 
 - P1
+  - discover with `/api/info`
+  - enumerate line outputs from `/api/output/settings`
+  - expose mute + gain targets across `ana`, `aes`, `avb`, and `mon`
+  - enumerate presets from `/api/configuration/library`
 - LC16D
-- LA7.16 / LA7.16i
-- LA12X
-- LA4X
-- LA2Xi
-- LA4 / LA8
-- LS10
-
-This plugin explicitly supports P1 and LC16D, but the API model is consistent across the family.
-
-## Connectivity
-
-- Protocol: HTTP (no HTTPS)
-- Transport: TCP
-- Port: 80
-- Base URL: `http://<device-ip-address>/api/<endpoint>`
-- In redundancy mode, API is available on both NICs, but only the primary interface is reachable via routing.
-
-## Performance constraints (do not ignore)
-
-- Maximum concurrent HTTP requests: 10
-- Requests beyond this limit fail
-- Recommended minimum polling interval: 50 ms
-
-The plugin must throttle requests and batch updates where possible.
-
-## Authentication
-
-- Method: HTTP Digest Authentication
-- Can be enabled or disabled per device
-- Defaults:
-
-| Device | Auth default | Username | Password |
-| --- | --- | --- | --- |
-| P1 | Disabled | admin | admin |
-| LC16D | Disabled | admin | admin |
-
-If auth is enabled and Digest is not implemented, requests receive HTTP 403.
-
-## Data model rules (critical for auto-detection)
-
-- The entire API is a hierarchical JSON model
-- GET on an object or array returns all children
-- GET on a property returns its value
-- POST updates writable properties
-- Invalid or read-only fields in POST bodies are silently ignored
-
-This enables auto-target discovery.
-
-## Device identification (discovery)
-
-**Get device info**
-
-`GET /api/info`
-
-Returns:
-
-- `name`
-- `firmware_version`
-- `serial`
-- `mac`
-- `avdecc_entity_id`
-
-Used for:
-
-- device discovery
-- labeling in inspector
-- capability gating
-
-## Output control (mute + level)
-
-**Output index**
-
-`GET /api/control/dsp/output`
-
-Returns an array of output objects. The number of items determines available outputs:
-
-- P1: typically 1–4
-- LC16D: typically 1–16
-
-**Output mute**
-
-- `GET  /api/control/dsp/output/<i>/mute`
-- `POST /api/control/dsp/output/<i>/mute`
-- Body: `true` | `false`
-
-Type: boolean. Read/write.
-
-**Output gain (recommended)**
-
-- `GET  /api/control/dsp/output/<i>/gain`
-- `POST /api/control/dsp/output/<i>/gain`
-- Body: `<dB>`
-
-Range: -60.0 … +15.0 dB. Type: dB (float). Read/write.
-
-**Output volume (optional mode)**
-
-- `GET  /api/control/dsp/output/<i>/volume`
-- `POST /api/control/dsp/output/<i>/volume`
-- Body: `<integer>`
-
-Range: 0 … 750. Type: uint. Read/write.
-
-**Batch control (important for groups)**
-
-`POST /api/control/dsp/gain`
-
-Body:
-
-```json
-[
-  { "mute": false, "gain": -6.0 },
-  { "gain": -9.0 },
-  {},
-  ...
-]
-```
-
-Applies per-index. Empty objects = no change. Strongly recommended for multi-output targets.
-
-## Preset / configuration control
-
-**List configuration library**
-
-- `GET /api/configuration/library/<i>/name`
-- `GET /api/configuration/library/<i>/used`
-
-Index range: 1..10. Used to populate preset dropdowns.
-
-**Recall configuration (preset)**
-
-`POST /api/configuration/load`
-
-Body: `{ "index": <1..10> }`
-
-Action endpoint. Response: HTTP 204 (no content).
-
-**Active configuration**
-
-`GET /api/configuration/active/index`
-
-Range: 0..10. Used for button state feedback.
-
-## Level and health feedback (optional UI)
-
-**Output peak level**
-
-`GET /api/level/dsp/output/<i>/peak`
-
-Returns peak level in dB. Read-only.
-
-**Output health**
-
-- `GET /api/monitor/output/<i>/state`
-- `GET /api/monitor/output/<i>/clip`
-- `GET /api/monitor/output/<i>/limit`
-
-State values:
-
-- `ok`
-- `protected`
-- `disabled`
-- `retry`
-
-## Critical behavioral rule (do not break this)
-
-**Active enclosures propagation rule**
-
-When multiple outputs drive a single active enclosure:
-
-- Gain, delay, polarity must not diverge
-- Device automatically propagates values across linked outputs
-- Last received value wins
-
-Implication for plugin:
-
-- Do not set all linked outputs manually
-- UI must tolerate multiple outputs changing from one command
-
-## What the plugin intentionally ignores
-
-Out of scope for Stream Deck control:
-
-- VLAN / RSTP config
-- AVB / AES67 stream routing
-- GPIO programming
-- EN54 monitoring
-- Network/IP configuration
-
-## Summary for implementation
-
-Use these endpoints only:
-
-- `/api/info`
-- `/api/control/dsp/output/*`
-- `/api/control/dsp/gain`
-- `/api/configuration/*`
-- `/api/level/dsp/output/*`
-- `/api/monitor/output/*`
+  - discover with `/api/info`
+  - enumerate presets from `/api/configuration/library`
+  - do not invent mute/level targets without a documented writable path
+- Amplified controllers
+  - continue using `/api/control/dsp/output`

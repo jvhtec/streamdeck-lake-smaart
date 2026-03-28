@@ -1,10 +1,13 @@
 const http = require('http');
 const crypto = require('crypto');
 
+const P1_FAMILIES = ['ana', 'aes', 'avb', 'mon'];
+
 function createMockLaServer(options = {}) {
     const host = options.host || '127.0.0.1';
     const port = Number(options.port || 0);
     const verbose = Boolean(options.verbose);
+    const profile = options.profile || 'p1';
     const authEnabled = Boolean(options.auth && options.auth.enabled);
     const authRealm = options.auth?.realm || 'L-Acoustics Mock';
     const authUsername = options.auth?.username || 'admin';
@@ -14,7 +17,7 @@ function createMockLaServer(options = {}) {
     const challengeStatus = Number(options.auth?.challengeStatus || 401);
     const faults = { ...(options.faults || {}) };
     const requests = [];
-    const state = cloneState(options.state || createDefaultState());
+    const state = cloneState(options.state || createDefaultState(profile));
 
     const server = http.createServer(async (req, res) => {
         const url = new URL(req.url || '/', `http://${req.headers.host || `${host}:${port || 80}`}`);
@@ -49,116 +52,179 @@ function createMockLaServer(options = {}) {
             return;
         }
 
-        const outputMatch = pathname.match(/^\/api\/control\/dsp\/output\/(\d+)(?:\/(mute|gain|volume))?$/);
-        const presetUsedMatch = pathname.match(/^\/api\/configuration\/library\/(\d+)\/used$/);
-        const presetNameMatch = pathname.match(/^\/api\/configuration\/library\/(\d+)\/name$/);
-
         if (requestRecord.method === 'GET' && pathname === '/api/info') {
-            requests.push({ ...requestRecord, status: 200 });
-            if (verbose) console.log(`[mock-la] GET ${pathname} -> 200`);
-            respond(res, 200, state.info);
-            return;
+            return complete(requestRecord, 200, state.info);
         }
 
-        if (requestRecord.method === 'GET' && pathname === '/api/control/dsp/output') {
-            requests.push({ ...requestRecord, status: 200 });
-            if (verbose) console.log(`[mock-la] GET ${pathname} -> 200`);
-            respond(res, 200, state.outputs);
-            return;
+        if (requestRecord.method === 'GET' && pathname === '/api/configuration/library') {
+            return complete(requestRecord, 200, state.configurationLibrary);
         }
 
-        if (outputMatch) {
-            const index = Number(outputMatch[1]);
-            const property = outputMatch[2];
-            const output = state.outputs[index - 1];
-            if (!output) {
-                requests.push({ ...requestRecord, status: 404 });
-                if (verbose) console.log(`[mock-la] ${requestRecord.method} ${pathname} -> 404`);
-                respond(res, 404, { error: 'Output not found' });
-                return;
-            }
-
-            if (requestRecord.method === 'GET' && !property) {
-                requests.push({ ...requestRecord, status: 200 });
-                if (verbose) console.log(`[mock-la] GET ${pathname} -> 200`);
-                respond(res, 200, output);
-                return;
-            }
-
-            if (requestRecord.method === 'GET' && property) {
-                requests.push({ ...requestRecord, status: 200 });
-                if (verbose) console.log(`[mock-la] GET ${pathname} -> 200`);
-                respond(res, 200, output[property]);
-                return;
-            }
-
-            if (requestRecord.method === 'POST' && property) {
-                if (!['mute', 'gain', 'volume'].includes(property)) {
-                    requests.push({ ...requestRecord, status: 404 });
-                    if (verbose) console.log(`[mock-la] POST ${pathname} -> 404`);
-                    respond(res, 404, { error: 'Property not found' });
-                    return;
-                }
-
-                if (property === 'mute') {
-                    output.mute = Boolean(body);
-                } else if (property === 'gain') {
-                    output.gain = Number(body);
-                } else if (property === 'volume') {
-                    output.volume = Math.round(Number(body));
-                }
-
-                requests.push({ ...requestRecord, status: 200 });
-                if (verbose) console.log(`[mock-la] POST ${pathname} -> 200`);
-                respond(res, 200, output[property]);
-                return;
-            }
-        }
-
-        if (presetUsedMatch && requestRecord.method === 'GET') {
-            const index = Number(presetUsedMatch[1]);
-            const preset = state.configurationLibrary[index - 1];
-            requests.push({ ...requestRecord, status: 200 });
-            if (verbose) console.log(`[mock-la] GET ${pathname} -> 200`);
-            respond(res, 200, Boolean(preset && preset.used));
-            return;
-        }
-
-        if (presetNameMatch && requestRecord.method === 'GET') {
-            const index = Number(presetNameMatch[1]);
-            const preset = state.configurationLibrary[index - 1];
-            requests.push({ ...requestRecord, status: 200 });
-            if (verbose) console.log(`[mock-la] GET ${pathname} -> 200`);
-            respond(res, 200, preset ? preset.name : `Preset ${index}`);
+        if (handleConfigurationLibraryItem(requestRecord)) {
             return;
         }
 
         if (pathname === '/api/configuration/load' && requestRecord.method === 'POST') {
             const index = Number(body && body.index);
             if (!Number.isInteger(index) || index < 1 || index > state.configurationLibrary.length) {
-                requests.push({ ...requestRecord, status: 400 });
-                if (verbose) console.log(`[mock-la] POST ${pathname} -> 400`);
-                respond(res, 400, { error: 'Invalid configuration index' });
-                return;
+                return complete(requestRecord, 400, { error: 'Invalid configuration index' });
             }
 
             state.activePresetIndex = index;
-            requests.push({ ...requestRecord, status: 204 });
-            if (verbose) console.log(`[mock-la] POST ${pathname} -> 204`);
-            respond(res, 204);
-            return;
+            return complete(requestRecord, 204);
         }
 
         if (pathname === '/api/configuration/active/index' && requestRecord.method === 'GET') {
-            requests.push({ ...requestRecord, status: 200 });
-            if (verbose) console.log(`[mock-la] GET ${pathname} -> 200`);
-            respond(res, 200, state.activePresetIndex);
+            return complete(requestRecord, 200, state.activePresetIndex);
+        }
+
+        if (profile === 'amplified' && handleAmplifiedOutputs(requestRecord)) {
             return;
         }
 
-        requests.push({ ...requestRecord, status: 404 });
-        if (verbose) console.log(`[mock-la] ${requestRecord.method} ${pathname} -> 404`);
-        respond(res, 404, { error: 'Not found' });
+        if (profile === 'p1' && handleP1Outputs(requestRecord)) {
+            return;
+        }
+
+        return complete(requestRecord, 404, { error: 'Not found' });
+
+        function handleConfigurationLibraryItem(record) {
+            const presetUsedMatch = pathname.match(/^\/api\/configuration\/library\/(\d+)\/used$/);
+            const presetNameMatch = pathname.match(/^\/api\/configuration\/library\/(\d+)\/name$/);
+
+            if (presetUsedMatch && record.method === 'GET') {
+                const index = Number(presetUsedMatch[1]);
+                const preset = state.configurationLibrary[index - 1];
+                complete(record, 200, Boolean(preset && preset.used));
+                return true;
+            }
+
+            if (presetNameMatch && record.method === 'GET') {
+                const index = Number(presetNameMatch[1]);
+                const preset = state.configurationLibrary[index - 1];
+                complete(record, 200, preset ? preset.name : `Preset ${index}`);
+                return true;
+            }
+
+            return false;
+        }
+
+        function handleAmplifiedOutputs(record) {
+            const outputMatch = pathname.match(/^\/api\/control\/dsp\/output\/(\d+)(?:\/(mute|gain|volume))?$/);
+
+            if (record.method === 'GET' && pathname === '/api/control/dsp/output') {
+                complete(record, 200, state.outputs);
+                return true;
+            }
+
+            if (!outputMatch) {
+                return false;
+            }
+
+            const index = Number(outputMatch[1]);
+            const property = outputMatch[2];
+            const output = state.outputs[index - 1];
+            if (!output) {
+                complete(record, 404, { error: 'Output not found' });
+                return true;
+            }
+
+            if (record.method === 'GET' && !property) {
+                complete(record, 200, output);
+                return true;
+            }
+
+            if (record.method === 'GET' && property) {
+                complete(record, 200, output[property]);
+                return true;
+            }
+
+            if (record.method === 'POST' && property) {
+                if (!['mute', 'gain', 'volume'].includes(property)) {
+                    complete(record, 404, { error: 'Property not found' });
+                    return true;
+                }
+                if (property === 'mute') {
+                    output.mute = Boolean(body);
+                } else if (property === 'gain') {
+                    output.gain = Number(body);
+                } else {
+                    output.volume = Math.round(Number(body));
+                }
+                complete(record, 200, output[property]);
+                return true;
+            }
+
+            return false;
+        }
+
+        function handleP1Outputs(record) {
+            const rootMatch = pathname.match(/^\/api\/output\/settings(?:\/(ana|aes|avb|mon)(?:\/(\d+)(?:\/(mute|gain))?)?)?$/);
+            if (!rootMatch) {
+                return false;
+            }
+
+            const family = rootMatch[1];
+            const index = rootMatch[2] ? Number(rootMatch[2]) : null;
+            const property = rootMatch[3];
+
+            if (record.method === 'GET' && !family) {
+                complete(record, 200, state.outputSettings);
+                return true;
+            }
+
+            if (!family || !P1_FAMILIES.includes(family)) {
+                complete(record, 404, { error: 'Output family not found' });
+                return true;
+            }
+
+            const familyOutputs = state.outputSettings[family] || [];
+
+            if (record.method === 'GET' && index === null) {
+                complete(record, 200, familyOutputs);
+                return true;
+            }
+
+            const output = familyOutputs[index - 1];
+            if (!output) {
+                complete(record, 404, { error: 'Output not found' });
+                return true;
+            }
+
+            if (record.method === 'GET' && !property) {
+                complete(record, 200, output);
+                return true;
+            }
+
+            if (record.method === 'GET' && property) {
+                complete(record, 200, output[property]);
+                return true;
+            }
+
+            if (record.method === 'POST' && property) {
+                if (!['mute', 'gain'].includes(property)) {
+                    complete(record, 404, { error: 'Property not found' });
+                    return true;
+                }
+                if (property === 'mute') {
+                    output.mute = Boolean(body);
+                } else {
+                    output.gain = Number(body);
+                }
+                complete(record, 200, output[property]);
+                return true;
+            }
+
+            return false;
+        }
+
+        function complete(record, status, responseBody, headers) {
+            requests.push({ ...record, status });
+            if (verbose) {
+                console.log(`[mock-la] ${record.method} ${pathname} -> ${status}`);
+            }
+            respond(res, status, responseBody, headers);
+        }
     });
 
     return {
@@ -196,35 +262,86 @@ function createMockLaServer(options = {}) {
     };
 }
 
-function createDefaultState() {
+function createDefaultState(profile) {
+    if (profile === 'amplified') {
+        return {
+            info: {
+                name: 'LA4X',
+                unit_name: 'Amp Rack',
+                firmware_version: '2.13.0',
+                serial: 'AMP123456',
+                mac: '00:11:22:33:44:55',
+                avdecc_entity_id: '0001020304050607',
+            },
+            outputs: [
+                { name: 'Output 1', mute: false, gain: -3.0, volume: 320 },
+                { name: 'Output 2', mute: false, gain: -6.0, volume: 300 },
+                { name: 'Output 3', mute: true, gain: -9.5, volume: 280 },
+                { name: 'Output 4', mute: false, gain: 0.0, volume: 360 },
+            ],
+            configurationLibrary: createConfigurationLibrary(10, ['Show A', 'Show B']),
+            activePresetIndex: 1,
+        };
+    }
+
+    if (profile === 'lc16d') {
+        return {
+            info: {
+                name: 'LC16D',
+                unit_name: 'LC16D Core',
+                firmware_version: '2.13.0',
+                serial: 'LC16123456',
+                mac: '00:11:22:33:44:66',
+                avdecc_entity_id: '0001020304050608',
+            },
+            configurationLibrary: createConfigurationLibrary(10, ['Festival', 'Corporate', 'Broadcast']),
+            activePresetIndex: 1,
+        };
+    }
+
     return {
         info: {
-            name: 'Mock P1',
+            name: 'P1',
+            unit_name: 'P1 Frontfill',
             firmware_version: '2.13.0',
-            serial: 'MOCK123456',
-            mac: '00:11:22:33:44:55',
-            avdecc_entity_id: '0001020304050607',
+            serial: 'P1123456',
+            mac: '00:11:22:33:44:77',
+            avdecc_entity_id: '0001020304050609',
         },
-        outputs: [
-            { name: 'Output 1', mute: false, gain: -3.0, volume: 320 },
-            { name: 'Output 2', mute: false, gain: -6.0, volume: 300 },
-            { name: 'Output 3', mute: true, gain: -9.5, volume: 280 },
-            { name: 'Output 4', mute: false, gain: 0.0, volume: 360 },
-        ],
-        configurationLibrary: [
-            { used: true, name: 'Show A' },
-            { used: true, name: 'Show B' },
-            { used: false, name: 'Unused 3' },
-            { used: false, name: 'Unused 4' },
-            { used: false, name: 'Unused 5' },
-            { used: false, name: 'Unused 6' },
-            { used: false, name: 'Unused 7' },
-            { used: false, name: 'Unused 8' },
-            { used: false, name: 'Unused 9' },
-            { used: false, name: 'Unused 10' },
-        ],
+        outputSettings: {
+            ana: [
+                { name: 'Analog Left', mute: false, gain: -3.0 },
+                { name: 'Analog Right', mute: false, gain: -3.0 },
+                { name: 'Analog Fill', mute: false, gain: -6.0 },
+                { name: 'Analog Sub', mute: true, gain: -8.0 },
+            ],
+            aes: [
+                { name: 'AES 1', mute: false, gain: -2.0 },
+                { name: 'AES 2', mute: false, gain: -2.0 },
+                { name: 'AES 3', mute: false, gain: -4.0 },
+                { name: 'AES 4', mute: true, gain: -7.0 },
+            ],
+            avb: Array.from({ length: 8 }, (_, index) => ({
+                name: `AVB ${index + 1}`,
+                mute: false,
+                gain: -1 * index,
+            })),
+            mon: [
+                { name: 'Monitor A', mute: false, gain: -10.0 },
+                { name: 'Monitor B', mute: false, gain: -10.0 },
+            ],
+        },
+        configurationLibrary: createConfigurationLibrary(30, ['Show A', 'Show B', 'Show C']),
         activePresetIndex: 1,
     };
+}
+
+function createConfigurationLibrary(length, usedNames) {
+    return Array.from({ length }, (_, index) => ({
+        index: index + 1,
+        used: index < usedNames.length,
+        name: index < usedNames.length ? usedNames[index] : `Unused ${index + 1}`,
+    }));
 }
 
 function cloneState(state) {

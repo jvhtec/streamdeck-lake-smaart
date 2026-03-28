@@ -2,7 +2,7 @@
 
 ## Overview
 
-This Stream Deck+ plugin provides control of Lake LM modules, L-Acoustics P1/LC16D outputs, and Smaart utility actions directly from Stream Deck keys and dials. It supports mute toggles, level control with encoder press-to-mute, preset/configuration recall, and Smaart workflow shortcuts.
+This Stream Deck+ plugin provides control of Lake LM modules, L-Acoustics P1 output controls, L-Acoustics LC16D configuration recall, and Smaart utility actions directly from Stream Deck keys and dials. It supports mute toggles, level control with encoder press-to-mute, preset/configuration recall, and Smaart workflow shortcuts.
 
 ## Requirements
 
@@ -23,10 +23,11 @@ Open the property inspector for any action and set:
 
 - **Lake Device Filter**: Optional device IP or frame ID. Leave it blank to discover all visible Lake frames, or set it to something like `169.254.x.x` or `3d000011:d6ed9201` to focus on one frame.
 - **Lake Port**: UDP port for Lake DLM control (default `6016`). Setting it to `6015` switches to fixed response mode and reserves local UDP port `6004`.
-- **Lake Adapter IP**: Local adapter IP on the Lake network. Set this when the computer has multiple active NICs or when you want to force the plugin to use the same APIPA adapter as Lake Controller.
+- **Lake Adapter IP**: Pick the local adapter IP on the Lake network. On multi-NIC systems, use this to force Lake traffic onto the same NIC as Lake Controller or the dedicated Lake control network.
 - **Lake Debug Log**: Enables verbose DLM logging in the Stream Deck log output while testing.
 - **Same-PC Testing**: If Lake Controller is running on the same computer, keep the plugin on dynamic mode (`6016`) so it does not occupy local UDP port `6004`.
-- **L-Acoustics Subnet**: Subnet to scan for devices (default `192.168.1.0/24`).
+- **LA Adapter IP**: Local adapter IP for L-Acoustics HTTP traffic. On multi-NIC systems, pick the NIC connected to the L-Acoustics control network so discovery and commands use the correct route.
+- **L-Acoustics Subnet**: Optional subnet override. Leave it blank to auto-derive a practical discovery subnet from the selected LA adapter.
 - **L-Acoustics Hosts**: Optional comma-separated list of device IPs to probe directly.
 - **HTTP User / Pass**: Credentials for Digest auth (defaults are `admin/admin` when enabled).
 - **LA Debug Log**: Enables request/status logging for L-Acoustics discovery, polling, and writes during troubleshooting or hardware test sessions.
@@ -45,8 +46,8 @@ Use the **Refresh Devices** button after changing discovery settings.
 **Property inspector settings**
 
 - Device: Auto-detected Lake or L-Acoustics device.
-- Target: Module/group (Lake) or output (L-Acoustics).
-- Mode: Gain (dB) or Volume (when supported).
+- Target: Module/group (Lake) or output (L-Acoustics P1 / amplified controllers with documented output control).
+- Mode: Gain (dB) or Volume (only when the selected target supports it).
 - Step Size: Increment per tick.
 - Min/Max: Clamp values for safety.
 
@@ -58,7 +59,7 @@ Use the **Refresh Devices** button after changing discovery settings.
 **Property inspector settings**
 
 - Device: Auto-detected Lake or L-Acoustics device.
-- Target: Module/group (Lake) or output (L-Acoustics).
+- Target: Module/group (Lake) or output (L-Acoustics targets that expose mute).
 - Momentary: Enable to mute while the key is held.
 
 ### Preset Recall (Button)
@@ -69,7 +70,7 @@ Use the **Refresh Devices** button after changing discovery settings.
 **Property inspector settings**
 
 - Device: Auto-detected Lake or L-Acoustics device.
-- Target: Preset slot (used slots are listed for L-Acoustics).
+- Target: Preset slot (used slots are listed for L-Acoustics; P1 and LC16D configuration ranges differ by device).
 - Double Press: Require a second press within ~1.2s.
 
 ### Smaart Generator (Button)

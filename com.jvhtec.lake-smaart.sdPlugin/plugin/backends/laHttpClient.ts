@@ -11,6 +11,7 @@ interface LaHttpClientOptions {
     debug?: boolean;
     logger?: LaLogFn;
     timeoutMs?: number;
+    localAddress?: string;
 }
 
 interface DigestChallenge {
@@ -28,6 +29,7 @@ export class LaHttpClient {
     private debug: boolean;
     private logger?: LaLogFn;
     private timeoutMs: number;
+    private localAddress?: string;
 
     constructor(host: string, username?: string, password?: string, options?: LaHttpClientOptions) {
         this.host = host;
@@ -36,6 +38,7 @@ export class LaHttpClient {
         this.debug = Boolean(options?.debug);
         this.logger = options?.logger;
         this.timeoutMs = options?.timeoutMs ?? 1200;
+        this.localAddress = options?.localAddress;
     }
 
     public async get<T>(path: string): Promise<LaRequestResult<T>> {
@@ -103,6 +106,7 @@ export class LaHttpClient {
                 path,
                 headers,
                 timeout: this.timeoutMs,
+                localAddress: this.localAddress || undefined,
             };
 
             const req = http.request(options, (res) => {

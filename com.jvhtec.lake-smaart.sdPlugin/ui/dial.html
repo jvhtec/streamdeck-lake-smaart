@@ -66,15 +66,19 @@
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Lake Adapter IP</div>
-                <input class="sdpi-item-value" type="text" id="lakeBindAddress" placeholder="Local adapter IP on Lake network" onchange="saveGlobalSettings()">
+                <select class="sdpi-item-value select" id="lakeBindAddress" onchange="saveGlobalSettings()"></select>
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Lake Debug Log</div>
                 <input class="sdpi-item-value" type="checkbox" id="lakeDebug" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
+                <div class="sdpi-item-label">LA Adapter IP</div>
+                <select class="sdpi-item-value select" id="laBindAddress" onchange="saveGlobalSettings()"></select>
+            </div>
+            <div class="sdpi-item">
                 <div class="sdpi-item-label">L-Acoustics Subnet</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.1.0/24" onchange="saveGlobalSettings()">
+                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="Auto from LA adapter" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">L-Acoustics Hosts</div>
@@ -108,7 +112,7 @@
 let websocket = null;
 let uuid = null;
 let actionInfo = null;
-let catalog = { devices: [], targets: [] };
+let catalog = { devices: [], targets: [], laAdapters: [] };
 let lastGlobalSettings = {};
 
 function getActionId() {
@@ -164,6 +168,8 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
         if (jsonObj.event === 'sendToPropertyInspector') {
             if (jsonObj.payload && jsonObj.payload.devices) {
                 catalog = jsonObj.payload;
+                updateLakeAdapterOptions(lastGlobalSettings.lakeBindAddress);
+                updateLaAdapterOptions(lastGlobalSettings.laBindAddress);
                 updateSelectors();
             }
         }
@@ -175,7 +181,7 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
 function loadSettings(settings) {
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -190,7 +196,7 @@ function loadSettings(settings) {
 
 function loadGlobalSettings(settings) {
     lastGlobalSettings = Object.assign({}, settings);
-    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el && settings[field] !== undefined) {
@@ -201,6 +207,8 @@ function loadGlobalSettings(settings) {
             }
         }
     });
+    updateLakeAdapterOptions(settings.lakeBindAddress);
+    updateLaAdapterOptions(settings.laBindAddress);
     updateUI();
 }
 
@@ -209,7 +217,7 @@ function saveSettings() {
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -231,7 +239,7 @@ function saveSettings() {
 function saveGlobalSettings() {
     if (!websocket) return;
     const payload = Object.assign({}, lastGlobalSettings);
-    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach((field) => {
         const el = document.getElementById(field);
         if (el) {
@@ -244,6 +252,66 @@ function saveGlobalSettings() {
         context: uuid,
         payload
     }));
+}
+
+function updateLaAdapterOptions(selectedAddress) {
+    const select = document.getElementById('laBindAddress');
+    if (!select) return;
+
+    const currentValue = selectedAddress || select.value || '';
+    const adapters = Array.isArray(catalog.laAdapters) ? catalog.laAdapters : [];
+    select.innerHTML = '';
+
+    const autoOption = document.createElement('option');
+    autoOption.value = '';
+    autoOption.textContent = 'Auto / system routing';
+    select.appendChild(autoOption);
+
+    adapters.forEach((adapter) => {
+        const option = document.createElement('option');
+        option.value = adapter.address;
+        option.textContent = adapter.label || adapter.address;
+        select.appendChild(option);
+    });
+
+    if (currentValue && !adapters.some((adapter) => adapter.address === currentValue)) {
+        const missingOption = document.createElement('option');
+        missingOption.value = currentValue;
+        missingOption.textContent = `${currentValue} (Unavailable)`;
+        select.appendChild(missingOption);
+    }
+
+    select.value = currentValue;
+}
+
+function updateLakeAdapterOptions(selectedAddress) {
+    const select = document.getElementById('lakeBindAddress');
+    if (!select) return;
+
+    const currentValue = selectedAddress || select.value || '';
+    const adapters = Array.isArray(catalog.laAdapters) ? catalog.laAdapters : [];
+    select.innerHTML = '';
+
+    const autoOption = document.createElement('option');
+    autoOption.value = '';
+    autoOption.textContent = 'Auto / system routing';
+    select.appendChild(autoOption);
+
+    adapters.forEach((adapter) => {
+        const option = document.createElement('option');
+        option.value = adapter.address;
+        option.textContent = adapter.label || adapter.address;
+        select.appendChild(option);
+    });
+
+    if (currentValue && !adapters.some((adapter) => adapter.address === currentValue)) {
+        const missingOption = document.createElement('option');
+        missingOption.value = currentValue;
+        missingOption.textContent = `${currentValue} (Unavailable)`;
+        select.appendChild(missingOption);
+    }
+
+    select.value = currentValue;
 }
 
 function updateUI() {

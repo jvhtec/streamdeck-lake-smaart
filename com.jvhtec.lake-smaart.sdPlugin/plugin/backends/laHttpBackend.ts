@@ -37,6 +37,7 @@ import {
 export interface LaHttpSettings {
     discoverySubnet: string;
     discoveryHosts: string[];
+    bindAddress?: string;
     username?: string;
     password?: string;
     debugLogging?: boolean;
@@ -65,7 +66,18 @@ export class LaHttpBackend implements Backend {
     }
 
     public updateSettings(settings: Partial<LaHttpSettings>) {
+        const previousBindAddress = this.settings.bindAddress;
+        const previousDiscoverySubnet = this.settings.discoverySubnet;
+        const previousDiscoveryHosts = this.settings.discoveryHosts.join(',');
         this.settings = { ...this.settings, ...settings };
+        const nextDiscoveryHosts = this.settings.discoveryHosts.join(',');
+        if (
+            previousBindAddress !== this.settings.bindAddress ||
+            previousDiscoverySubnet !== this.settings.discoverySubnet ||
+            previousDiscoveryHosts !== nextDiscoveryHosts
+        ) {
+            this.outputSnapshots.clear();
+        }
     }
 
     public async discover(): Promise<DeviceDescriptor[]> {
@@ -213,6 +225,10 @@ export class LaHttpBackend implements Backend {
         if (manualHosts.length > 0) {
             return manualHosts;
         }
+        if (!this.settings.discoverySubnet) {
+            this.logDebug('No LA discovery subnet resolved; skipping subnet scan.');
+            return [];
+        }
         return this.expandSubnet(this.settings.discoverySubnet);
     }
 
@@ -273,6 +289,7 @@ export class LaHttpBackend implements Backend {
         return new LaHttpClient(host, this.settings.username, this.settings.password, {
             debug: Boolean(this.settings.debugLogging),
             logger: this.logger,
+            localAddress: this.settings.bindAddress,
         });
     }
 

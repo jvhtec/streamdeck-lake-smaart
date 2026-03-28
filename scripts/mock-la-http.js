@@ -9,10 +9,12 @@ async function main() {
     const username = readOption(args, 'user') || process.env.npm_config_user || 'admin';
     const password = readOption(args, 'pass') || process.env.npm_config_pass || 'admin';
     const challengeStatus = Number(readOption(args, 'challenge-status') || process.env.npm_config_challenge_status || '401');
+    const profile = readOption(args, 'profile') || process.env.npm_config_profile || 'p1';
 
     const server = createMockLaServer({
         host,
         port,
+        profile,
         verbose,
         auth: authEnabled
             ? {
@@ -26,6 +28,7 @@ async function main() {
 
     const address = await server.start();
     console.log(`[mock-la] Listening on http://${address.host}:${address.port}`);
+    console.log(`[mock-la] Profile: ${profile}`);
     console.log('[mock-la] Point the plugin L-Acoustics host to this address or use --host with the smoke CLI.');
     if (authEnabled) {
         console.log(`[mock-la] Digest auth enabled with user "${username}".`);

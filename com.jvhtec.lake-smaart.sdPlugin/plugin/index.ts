@@ -15,6 +15,7 @@ import { KeySmaartTraceToggleAction } from './actions/keySmaartTraceToggle';
 import { KeySmaartSplMeterAction } from './actions/keySmaartSplMeter';
 import { SmaartGeneratorGainDialAction } from './actions/smaartGeneratorGainDialAction';
 import { PiServer } from './piServer';
+import { deriveDiscoverySubnet, findIpv4AdapterByAddress, listIpv4Adapters } from './core/networkAdapters';
 
 const args = process.argv.slice(2);
 let port = '0';
@@ -44,7 +45,8 @@ const defaultSettings = {
     lakePort: 6016,
     lakeBindAddress: '',
     lakeDebug: false,
-    laDiscoverySubnet: '192.168.1.0/24',
+    laBindAddress: '',
+    laDiscoverySubnet: '',
     laDiscoveryHosts: '',
     laAuthUser: '',
     laAuthPass: '',
@@ -68,6 +70,7 @@ const lakeBackend = new LakeBackend(dlmClient, {
 const laHttpBackend = new LaHttpBackend({
     discoverySubnet: defaultSettings.laDiscoverySubnet,
     discoveryHosts: [],
+    bindAddress: defaultSettings.laBindAddress || undefined,
     username: defaultSettings.laAuthUser || undefined,
     password: defaultSettings.laAuthPass || undefined,
     debugLogging: defaultSettings.laDebugLogging,
@@ -83,6 +86,55 @@ dlmClient.on('log', (message: string) => {
 });
 
 const router = new Router(sdClient);
+
+function buildLaAdapterCatalog() {
+    return listIpv4Adapters().map((adapter) => ({
+        address: adapter.address,
+        label: adapter.label,
+        netmask: adapter.netmask,
+        prefixLength: adapter.prefixLength,
+        cidr: adapter.cidr,
+    }));
+}
+
+function buildInspectorCatalog() {
+    return {
+        devices: deviceManager.getDevices(),
+        targets: deviceManager.getTargets(),
+        laAdapters: buildLaAdapterCatalog(),
+    };
+}
+
+function resolveLaBackendSettings(settings: Record<string, any>) {
+    const adapters = listIpv4Adapters();
+    const configuredBindAddress = String(settings.laBindAddress || defaultSettings.laBindAddress || '').trim();
+    const selectedAdapter = findIpv4AdapterByAddress(configuredBindAddress, adapters);
+    const configuredSubnet = String(settings.laDiscoverySubnet || defaultSettings.laDiscoverySubnet || '').trim();
+    const resolvedSubnet =
+        configuredSubnet ||
+        (selectedAdapter ? deriveDiscoverySubnet(selectedAdapter.address, selectedAdapter.netmask) || '' : '');
+
+    if (configuredBindAddress && !selectedAdapter) {
+        logPluginMessage(`[LA] Selected adapter IP ${configuredBindAddress} is no longer available on this machine.`);
+    }
+
+    return {
+        bindAddress: selectedAdapter?.address || undefined,
+        discoverySubnet: resolvedSubnet,
+        discoveryHosts: String(settings.laDiscoveryHosts || '')
+            .split(',')
+            .map((host: string) => host.trim())
+            .filter(Boolean),
+        username: settings.laAuthUser || undefined,
+        password: settings.laAuthPass || undefined,
+        debugLogging:
+            settings.laDebugLogging === true ||
+            settings.laDebugLogging === 'true' ||
+            settings.laDebugLogging === '1',
+        adapter: selectedAdapter,
+        configuredSubnet,
+    };
+}
 
 function mapSmaartSplCatalog(response: any) {
     const inputs = Array.isArray(response?.devices)
@@ -134,9 +186,11 @@ if (hasUnsafePathChars) {
         onSetGlobalSettings: (settings) => sdClient.setGlobalSettings(settings),
         onGetCatalog: (respond) => {
             deviceManager.refreshCatalog().then(() => {
-                respond(deviceManager.getDevices(), deviceManager.getTargets());
+                const catalog = buildInspectorCatalog();
+                respond(catalog.devices, catalog.targets, catalog.laAdapters);
             }).catch(() => {
-                respond(deviceManager.getDevices(), deviceManager.getTargets());
+                const catalog = buildInspectorCatalog();
+                respond(catalog.devices, catalog.targets, catalog.laAdapters);
             });
         },
         onGetSmaartSplCatalog: async (respond) => {
@@ -201,19 +255,24 @@ sdClient.onEvents((event) => {
             bindAddress: settings.lakeBindAddress || defaultSettings.lakeBindAddress,
             debug: resolvedLakeDebug,
         });
+        const resolvedLa = resolveLaBackendSettings(settings);
         laHttpBackend.updateSettings({
-            discoverySubnet: settings.laDiscoverySubnet || defaultSettings.laDiscoverySubnet,
-            discoveryHosts: (settings.laDiscoveryHosts || '')
-                .split(',')
-                .map((host: string) => host.trim())
-                .filter(Boolean),
-            username: settings.laAuthUser || undefined,
-            password: settings.laAuthPass || undefined,
-            debugLogging:
-                settings.laDebugLogging === true ||
-                settings.laDebugLogging === 'true' ||
-                settings.laDebugLogging === '1',
+            bindAddress: resolvedLa.bindAddress,
+            discoverySubnet: resolvedLa.discoverySubnet,
+            discoveryHosts: resolvedLa.discoveryHosts,
+            username: resolvedLa.username,
+            password: resolvedLa.password,
+            debugLogging: resolvedLa.debugLogging,
         });
+        if (resolvedLa.debugLogging) {
+            const bindingDetail = resolvedLa.adapter
+                ? `adapter ${resolvedLa.adapter.name} (${resolvedLa.adapter.address}/${resolvedLa.adapter.prefixLength})`
+                : resolvedLa.bindAddress
+                    ? `adapter IP ${resolvedLa.bindAddress}`
+                    : 'system routing';
+            const subnetDetail = resolvedLa.discoverySubnet || 'manual hosts only';
+            logPluginMessage(`[LA] Using ${bindingDetail}; discovery subnet ${subnetDetail}.`);
+        }
         smaartClient.setTarget(
             settings.smaartHost || defaultSettings.smaartHost,
             Number(settings.smaartPort) || defaultSettings.smaartPort
@@ -225,10 +284,7 @@ sdClient.onEvents((event) => {
         const request = event.payload?.request;
         if (request === 'catalog') {
             deviceManager.refreshCatalog().then(() => {
-                sdClient.sendToPropertyInspector(event.context, {
-                    devices: deviceManager.getDevices(),
-                    targets: deviceManager.getTargets(),
-                });
+                sdClient.sendToPropertyInspector(event.context, buildInspectorCatalog());
             });
             return;
         }

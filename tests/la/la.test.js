@@ -11,6 +11,17 @@ const { LaHttpBackend } = require(path.join(distRoot, 'backends', 'laHttpBackend
 const { MuteAction } = require(path.join(distRoot, 'actions', 'muteAction.js'));
 const { LevelEncoderAction } = require(path.join(distRoot, 'actions', 'levelEncoderAction.js'));
 const { PresetRecallAction } = require(path.join(distRoot, 'actions', 'presetRecallAction.js'));
+const { deriveDiscoverySubnet, prefixLengthFromNetmask } = require(path.join(distRoot, 'core', 'networkAdapters.js'));
+
+test('deriveDiscoverySubnet keeps /24 networks intact', () => {
+    assert.equal(deriveDiscoverySubnet('192.168.1.35', '255.255.255.0'), '192.168.1.0/24');
+    assert.equal(prefixLengthFromNetmask('255.255.255.0'), 24);
+});
+
+test('deriveDiscoverySubnet narrows broad adapter masks to a practical /24 scan window', () => {
+    assert.equal(deriveDiscoverySubnet('169.254.158.10', '255.255.0.0'), '169.254.158.0/24');
+    assert.equal(prefixLengthFromNetmask('255.255.0.0'), 16);
+});
 
 test('LaHttpClient retries digest auth on HTTP 401 without leaking credentials', async (t) => {
     const server = createMockLaServer({
@@ -56,8 +67,60 @@ test('LaHttpClient retries digest auth on HTTP 403', async (t) => {
     assert.equal(server.requests[1].authorized, true);
 });
 
-test('LaHttpBackend dedupes output snapshot requests across concurrent state polls', async (t) => {
-    const server = createMockLaServer();
+test('LaHttpBackend discovers P1 output families and dedupes snapshot reads', async (t) => {
+    const server = createMockLaServer({ profile: 'p1' });
+    const address = await server.start();
+    t.after(async () => server.stop());
+
+    const backend = new LaHttpBackend({
+        discoverySubnet: '192.168.1.0/24',
+        discoveryHosts: [`${address.host}:${address.port}`],
+    });
+
+    const [device] = await backend.discover();
+    assert.equal(device.model, 'P1');
+    assert.equal(device.name, 'P1 Frontfill');
+
+    const targets = await backend.getTargets(device);
+    const outputTargets = targets.filter((target) => target.kind === 'output');
+    const presetTargets = targets.filter((target) => target.kind === 'preset');
+
+    assert.equal(outputTargets.length, 18);
+    assert.ok(outputTargets.some((target) => target.id === 'ana:1'));
+    assert.ok(outputTargets.some((target) => target.id === 'avb:8'));
+    assert.equal(presetTargets.length, 3);
+
+    const before = countRequests(server.requests, 'GET', '/api/output/settings');
+    const [stateA, stateB] = await Promise.all([
+        backend.getState(outputTargets.find((target) => target.id === 'ana:1')),
+        backend.getState(outputTargets.find((target) => target.id === 'mon:1')),
+    ]);
+    const after = countRequests(server.requests, 'GET', '/api/output/settings');
+
+    assert.equal(after - before, 1);
+    assert.equal(typeof stateA.mute, 'boolean');
+    assert.equal(typeof stateB.levelDb, 'number');
+});
+
+test('LaHttpBackend uses one configuration library read for P1 target discovery', async (t) => {
+    const server = createMockLaServer({ profile: 'p1' });
+    const address = await server.start();
+    t.after(async () => server.stop());
+
+    const backend = new LaHttpBackend({
+        discoverySubnet: '192.168.1.0/24',
+        discoveryHosts: [`${address.host}:${address.port}`],
+    });
+
+    const [device] = await backend.discover();
+    await backend.getTargets(device);
+
+    assert.equal(countRequests(server.requests, 'GET', '/api/configuration/library'), 1);
+    assert.equal(countRequestsMatching(server.requests, 'GET', /^\/api\/configuration\/library\/\d+\/used$/), 0);
+});
+
+test('LaHttpBackend exposes LC16D preset targets without unsupported output controls', async (t) => {
+    const server = createMockLaServer({ profile: 'lc16d' });
     const address = await server.start();
     t.after(async () => server.stop());
 
@@ -68,22 +131,18 @@ test('LaHttpBackend dedupes output snapshot requests across concurrent state pol
 
     const [device] = await backend.discover();
     const targets = await backend.getTargets(device);
-    const outputTargets = targets.filter((target) => target.kind === 'output');
 
-    const before = countRequests(server.requests, 'GET', '/api/control/dsp/output');
-    const [stateA, stateB] = await Promise.all([
-        backend.getState(outputTargets[0]),
-        backend.getState(outputTargets[1]),
-    ]);
-    const after = countRequests(server.requests, 'GET', '/api/control/dsp/output');
+    assert.equal(device.model, 'LC16D');
+    assert.equal(targets.filter((target) => target.kind === 'output').length, 0);
+    assert.equal(targets.filter((target) => target.kind === 'preset').length, 3);
 
-    assert.equal(after - before, 1);
-    assert.equal(typeof stateA.mute, 'boolean');
-    assert.equal(typeof stateB.levelDb, 'number');
+    await backend.recallPreset(device, 2);
+    const activePresetIndex = await backend.getActivePresetIndex(device);
+    assert.equal(activePresetIndex, 2);
 });
 
-test('LaHttpBackend recalls presets via HTTP 204 and reports active preset index', async (t) => {
-    const server = createMockLaServer();
+test('LaHttpBackend still supports amplified-controller output paths', async (t) => {
+    const server = createMockLaServer({ profile: 'amplified' });
     const address = await server.start();
     t.after(async () => server.stop());
 
@@ -93,16 +152,19 @@ test('LaHttpBackend recalls presets via HTTP 204 and reports active preset index
     });
 
     const [device] = await backend.discover();
-    await backend.recallPreset(device, 2);
-    const activePresetIndex = await backend.getActivePresetIndex(device);
+    const targets = await backend.getTargets(device);
+    const outputTarget = targets.find((target) => target.kind === 'output');
+    const state = await backend.getState(outputTarget);
 
-    assert.equal(activePresetIndex, 2);
+    assert.equal(device.model, 'LA4X');
+    assert.equal(typeof state.volume, 'number');
 });
 
-test('LaHttpBackend rejects failed property writes', async (t) => {
+test('LaHttpBackend rejects failed P1 property writes', async (t) => {
     const server = createMockLaServer({
+        profile: 'p1',
         faults: {
-            'POST /api/control/dsp/output/1/mute': { status: 500, body: { error: 'nope' } },
+            'POST /api/output/settings/ana/1/mute': { status: 500, body: { error: 'nope' } },
         },
     });
     const address = await server.start();
@@ -115,7 +177,7 @@ test('LaHttpBackend rejects failed property writes', async (t) => {
 
     const [device] = await backend.discover();
     const targets = await backend.getTargets(device);
-    const outputTarget = targets.find((target) => target.kind === 'output');
+    const outputTarget = targets.find((target) => target.kind === 'output' && target.id === 'ana:1');
 
     await assert.rejects(() => backend.setMute(outputTarget, true), /HTTP 500/);
 });
@@ -132,7 +194,7 @@ test('MuteAction shows an alert instead of optimistic state on failure', async (
         context: 'ctx',
         payload: {
             settings: {
-                targetId: 'la:1',
+                targetId: 'la_http:la_device:output:ana:1',
                 momentary: false,
             },
         },
@@ -157,7 +219,7 @@ test('LevelEncoderAction shows an alert instead of optimistic feedback on failur
         payload: {
             ticks: 1,
             settings: {
-                targetId: 'la:1',
+                targetId: 'la_http:la_device:output:ana:1',
                 levelMode: 'gain',
                 stepSize: 1,
                 minLevel: -60,
@@ -183,7 +245,7 @@ test('PresetRecallAction shows an alert instead of OK on failure', async () => {
         context: 'ctx',
         payload: {
             settings: {
-                targetId: 'la:preset:1',
+                targetId: 'la_http:la_device:preset:1',
                 requireDoublePress: false,
             },
         },
@@ -196,6 +258,10 @@ test('PresetRecallAction shows an alert instead of OK on failure', async () => {
 
 function countRequests(requests, method, path) {
     return requests.filter((request) => request.method === method && request.path === path).length;
+}
+
+function countRequestsMatching(requests, method, pattern) {
+    return requests.filter((request) => request.method === method && pattern.test(request.path)).length;
 }
 
 class FakeSDClient {
@@ -236,7 +302,17 @@ class FakeDeviceManager extends EventEmitter {
     constructor(options = {}) {
         super();
         this.options = options;
-        this.target = { name: 'Output 1', backend: 'la_http', deviceId: 'la_device', kind: 'output', index: 1 };
+        this.target = {
+            name: 'Analog 1',
+            backend: 'la_http',
+            deviceId: 'la_device',
+            kind: 'output',
+            id: 'ana:1',
+            index: 1,
+            supports: ['mute', 'level'],
+            path: '/api/output/settings/ana/1',
+            profile: 'p1',
+        };
         this.targetState = options.targetState || {
             online: true,
             mute: false,
@@ -258,7 +334,7 @@ class FakeDeviceManager extends EventEmitter {
     }
 
     getTargetId() {
-        return 'la_http:la_device:output:1';
+        return 'la_http:la_device:output:ana:1';
     }
 
     async setMute() {

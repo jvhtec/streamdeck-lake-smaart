@@ -16,7 +16,7 @@ export interface PiServerCallbacks {
     onSetSettings: (context: string, settings: any) => void;
     onGetGlobalSettings: () => void;
     onSetGlobalSettings: (settings: any) => void;
-    onGetCatalog: (respond: (devices: any[], targets: any[]) => void) => void;
+    onGetCatalog: (respond: (devices: any[], targets: any[], laAdapters: any[]) => void) => void;
     onGetSmaartSplCatalog: (respond: (inputs: any[], metrics: string[], error?: string) => void) => void;
 }
 
@@ -89,10 +89,10 @@ export class PiServer {
     }
 
     /** Forward catalog to all connected browser PIs. */
-    public sendCatalog(devices: any[], targets: any[]) {
+    public sendCatalog(devices: any[], targets: any[], laAdapters: any[]) {
         for (const client of this.clients) {
             if (client.authenticated && client.ws.readyState === WebSocket.OPEN) {
-                client.ws.send(JSON.stringify({ type: 'catalog', devices, targets }));
+                client.ws.send(JSON.stringify({ type: 'catalog', devices, targets, laAdapters }));
             }
         }
     }
@@ -195,9 +195,9 @@ export class PiServer {
                 }
                 break;
             case 'getCatalog':
-                this.callbacks.onGetCatalog((devices, targets) => {
+                this.callbacks.onGetCatalog((devices, targets, laAdapters) => {
                     if (client.ws.readyState === WebSocket.OPEN) {
-                        client.ws.send(JSON.stringify({ type: 'catalog', devices, targets }));
+                        client.ws.send(JSON.stringify({ type: 'catalog', devices, targets, laAdapters }));
                     }
                 });
                 break;

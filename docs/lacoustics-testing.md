@@ -7,7 +7,7 @@ Repeatable local and hardware validation steps for the L-Acoustics transport, ba
 - Start the mock server:
 
 ```powershell
-npm run la:mock -- --port 18080
+npm run la:mock -- --port 18080 --profile p1
 ```
 
 - Run the read-only smoke pass:
@@ -29,46 +29,55 @@ npm run test:la
 ```
 
 The smoke runner accepts `host:port`, optional `--user` / `--pass`, `--verbose`, and `--write-checks`. Read-only mode is the default so accidental audio changes are avoided unless you opt in.
+Add `--bind <local-ip>` when you need to force a specific NIC during hardware tests on a multi-homed machine.
 
 If you want only the smoke runner's verbose output without npm's own verbose logging, run `node scripts/la-smoke.js --host <host> --verbose` after `npm run build`.
 
 ## What the mock covers
 
 - `GET /api/info`
-- `GET /api/control/dsp/output`
-- `GET /api/control/dsp/output/<i>`
-- `GET` / `POST` for output `mute`, `gain`, and `volume`
-- Configuration library `used` and `name`
+- P1 profile:
+  - `GET /api/output/settings`
+  - `GET /api/output/settings/<family>`
+  - `GET` / `POST` for output `mute` and `gain`
+- Amplified profile:
+  - `GET /api/control/dsp/output`
+  - `GET /api/control/dsp/output/<i>`
+  - `GET` / `POST` for output `mute`, `gain`, and `volume`
+- Configuration library array reads plus `used` / `name` item reads
 - Active preset index
 - Configuration recall with HTTP `204`
 - Optional Digest auth challenge mode via `--auth`
+
+Use `--profile p1`, `--profile lc16d`, or `--profile amplified` when you want the mock to emulate a specific device family.
 
 ## Monday hardware workflow
 
 1. Build the plugin with `npm run build`.
 2. In the property inspector, enable **LA Debug Log**.
-3. Point the plugin to the target device using the normal subnet/host settings.
-4. Run the read-only smoke pass first:
+3. Select the correct **LA Adapter IP** for the target system NIC.
+4. Point the plugin to the target device using manual hosts or the auto-derived subnet.
+5. Run the read-only smoke pass first:
 
 ```powershell
 npm run la:smoke -- --host <device-ip> --user <user> --pass <pass> --verbose
 ```
 
-5. Confirm:
+6. Confirm:
    - device discovery succeeds
-   - output enumeration count is correct
+   - P1 output-family enumeration is correct, or LC16D exposes only preset targets as expected
    - preset library entries are listed correctly
    - active preset index reads correctly
    - Stream Deck logs show request path, HTTP status, and timing
-6. If read-only checks pass, run the explicit write pass:
+7. If read-only checks pass, run the explicit write pass:
 
 ```powershell
 npm run la:smoke -- --host <device-ip> --user <user> --pass <pass> --verbose --write-checks
 ```
 
-7. Confirm:
-   - one mute toggle succeeds and restores
-   - one gain change succeeds and restores
+8. Confirm:
+   - on P1, one mute toggle succeeds and restores
+   - on P1, one gain change succeeds and restores
    - one preset recall succeeds and restores when possible
    - failed commands trigger Stream Deck alerts instead of silent success
 

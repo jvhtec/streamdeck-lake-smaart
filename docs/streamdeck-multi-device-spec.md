@@ -37,8 +37,8 @@ Toggle mute on a selected target.
 **Supported targets**
 
 - Lake LM: module or group mute
-- P1: DSP output mute (1–4)
-- LC16D: DSP output mute (1–16)
+- P1: output mute on documented `ana` / `aes` / `avb` / `mon` output families
+- LC16D: no mute targets until a documented writable path is confirmed
 
 ### Button action: PRESET RECALL
 
@@ -54,7 +54,8 @@ Recall a predefined configuration/preset on the target device.
 **Supported targets**
 
 - Lake LM: Lake preset/module recall
-- P1 / LC16D: configuration slot recall (1–10)
+- P1: configuration slot recall (1–30)
+- LC16D: configuration slot recall (1–10)
 
 ### Encoder action: LEVEL + PRESS-TO-MUTE
 
@@ -71,9 +72,10 @@ Primary continuous control.
 **Supported targets**
 
 - Lake LM: module/group gain + mute
-- P1 / LC16D:
-  - Gain in dB (-60 … +15)
-  - Optional volume integer (0 … 750)
+- P1:
+  - Gain in dB (-60 … +15) on documented output families
+- LC16D:
+  - no encoder targets until a documented writable mute/gain path is confirmed
 
 **Design rule**
 
@@ -115,7 +117,9 @@ type Target =
       backend: "la_http";
       deviceId: string;
       kind: "output";
+      id: string;
       index: number;
+      path: string;
       supports: ["mute", "level"];
     }
   | {
@@ -157,31 +161,37 @@ This allows:
 
 Once a device is known, build a Target Catalog.
 
-**P1 / LC16D targets**
+**P1 targets**
 
 Outputs
 
-- `GET /api/control/dsp/output`
-- Result length determines output count
-- P1: typically 1–4
-- LC16D: typically 1–16
-- Each output becomes a `kind: "output"` target
+- `GET /api/output/settings`
+- Output families are `ana`, `aes`, `avb`, and `mon`
+- Each family member becomes a `kind: "output"` target with a stable family-aware ID such as `ana:1`
 
 Capabilities
 
-- Probe one output:
-  - `/mute`
-  - `/gain`
-  - `/volume`
-- Mark supported parameters accordingly
+- P1 output targets expose `/mute` and `/gain`
+- P1 does not use `/api/control/dsp/output` for its main writable output family
+- Volume mode is not assumed for P1
 
 Presets
 
-- Iterate slots 1–10:
-  - `/api/configuration/library/<i>/used`
-  - `/api/configuration/library/<i>/name`
+- `GET /api/configuration/library`
 - Only include used slots
 - Each becomes a `kind: "preset"` target
+
+**LC16D targets**
+
+Presets
+
+- `GET /api/configuration/library`
+- Only include used slots
+- Each becomes a `kind: "preset"` target
+
+Outputs
+
+- Do not expose LC16D mute/level targets unless a documented writable control path is confirmed
 
 **Lake LM targets**
 
@@ -233,14 +243,15 @@ The inspector is data-driven by the Target Catalog.
 
 ### State sources
 
-**P1 / LC16D**
+**P1**
 
-- Mute: `/api/control/dsp/output/<i>/mute`
-- Level: `/gain` or `/volume`
+- Mute: `/api/output/settings/<family>/<i>/mute`
+- Level: `/api/output/settings/<family>/<i>/gain`
 - Active preset: `/api/configuration/active/index`
-- Optional feedback:
-  - `/api/level/dsp/output/<i>/peak`
-  - `/api/monitor/output/<i>/state`
+
+**LC16D**
+
+- Active preset: `/api/configuration/active/index`
 
 **Lake LM**
 
@@ -269,7 +280,8 @@ The inspector is data-driven by the Target Catalog.
   - Encoders map to P1 outputs
   - Presets map to P1 configs
 - If only LC16D is present:
-  - Encoders map to LC16D outputs
+  - Presets map to LC16D configs
+  - Encoder and mute actions remain unbound unless LC16D writable output control is confirmed
 - If both are present:
   - Presets default to P1
   - Outputs default to LC16D

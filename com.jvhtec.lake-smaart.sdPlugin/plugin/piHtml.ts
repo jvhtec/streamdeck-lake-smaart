@@ -19,15 +19,19 @@ const LAKE_GLOBAL_FIELDS = `
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Lake Adapter IP</div>
-                <input class="sdpi-item-value" type="text" id="lakeBindAddress" placeholder="Local adapter IP on Lake network" onchange="saveGlobalSettings()">
+                <select class="sdpi-item-value select" id="lakeBindAddress" onchange="saveGlobalSettings()"></select>
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Lake Debug Log</div>
                 <input class="sdpi-item-value" type="checkbox" id="lakeDebug" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
+                <div class="sdpi-item-label">LA Adapter IP</div>
+                <select class="sdpi-item-value select" id="laBindAddress" onchange="saveGlobalSettings()"></select>
+            </div>
+            <div class="sdpi-item">
                 <div class="sdpi-item-label">L-Acoustics Subnet</div>
-                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="192.168.1.0/24" onchange="saveGlobalSettings()">
+                <input class="sdpi-item-value" type="text" id="laDiscoverySubnet" placeholder="Auto from LA adapter" onchange="saveGlobalSettings()">
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">L-Acoustics Hosts</div>
@@ -64,7 +68,7 @@ function buildScript(extraInit: string): string {
 let websocket = null;
 let action = '';
 let context = '';
-let catalog = { devices: [], targets: [] };
+let catalog = { devices: [], targets: [], laAdapters: [] };
 let pendingDeviceId = null;
 let pendingTargetId = null;
 let lastGlobalSettings = {};
@@ -128,7 +132,9 @@ function isPresetAction() {
             loadGlobalSettings(msg.settings || {});
         }
         if (msg.type === 'catalog') {
-            catalog = { devices: msg.devices || [], targets: msg.targets || [] };
+            catalog = { devices: msg.devices || [], targets: msg.targets || [], laAdapters: msg.laAdapters || [] };
+            updateLakeAdapterOptions(lastGlobalSettings.lakeBindAddress);
+            updateLaAdapterOptions(lastGlobalSettings.laBindAddress);
             var devId = pendingDeviceId;
             var tgtId = pendingTargetId;
             pendingDeviceId = null;
@@ -149,7 +155,7 @@ function isPresetAction() {
 
 function loadSettings(settings) {
     lastSettings = Object.assign({}, settings);
-    const globalFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+    const globalFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(function(input) {
         if (!input.id || globalFields.includes(input.id)) return;
@@ -171,7 +177,7 @@ function loadSettings(settings) {
 
 function loadGlobalSettings(settings) {
     lastGlobalSettings = Object.assign({}, settings);
-    var fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+    var fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach(function(field) {
         var el = document.getElementById(field);
         if (el && settings[field] !== undefined) {
@@ -182,6 +188,8 @@ function loadGlobalSettings(settings) {
             }
         }
     });
+    updateLakeAdapterOptions(settings.lakeBindAddress);
+    updateLaAdapterOptions(settings.laBindAddress);
     if (isSmaartSplAction()) {
         requestSmaartSplCatalog();
     }
@@ -190,7 +198,7 @@ function loadGlobalSettings(settings) {
 
 function saveSettings() {
     if (!websocket) return;
-    var globalFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+    var globalFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     var settings = {};
     var inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(function(input) {
@@ -214,7 +222,7 @@ function saveSettings() {
 function saveGlobalSettings() {
     if (!websocket) return;
     var payload = Object.assign({}, lastGlobalSettings);
-    var fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+    var fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     fields.forEach(function(field) {
         var el = document.getElementById(field);
         if (el) {
@@ -228,6 +236,66 @@ function saveGlobalSettings() {
     if (isSmaartSplAction()) {
         setTimeout(requestSmaartSplCatalog, 0);
     }
+}
+
+function updateLaAdapterOptions(selectedAddress) {
+    var select = document.getElementById('laBindAddress');
+    if (!select) return;
+
+    var currentValue = selectedAddress || select.value || '';
+    var adapters = Array.isArray(catalog.laAdapters) ? catalog.laAdapters : [];
+    select.innerHTML = '';
+
+    var autoOption = document.createElement('option');
+    autoOption.value = '';
+    autoOption.textContent = 'Auto / system routing';
+    select.appendChild(autoOption);
+
+    adapters.forEach(function(adapter) {
+        var option = document.createElement('option');
+        option.value = adapter.address;
+        option.textContent = adapter.label || adapter.address;
+        select.appendChild(option);
+    });
+
+    if (currentValue && !adapters.some(function(adapter) { return adapter.address === currentValue; })) {
+        var missingOption = document.createElement('option');
+        missingOption.value = currentValue;
+        missingOption.textContent = currentValue + ' (Unavailable)';
+        select.appendChild(missingOption);
+    }
+
+    select.value = currentValue;
+}
+
+function updateLakeAdapterOptions(selectedAddress) {
+    var select = document.getElementById('lakeBindAddress');
+    if (!select) return;
+
+    var currentValue = selectedAddress || select.value || '';
+    var adapters = Array.isArray(catalog.laAdapters) ? catalog.laAdapters : [];
+    select.innerHTML = '';
+
+    var autoOption = document.createElement('option');
+    autoOption.value = '';
+    autoOption.textContent = 'Auto / system routing';
+    select.appendChild(autoOption);
+
+    adapters.forEach(function(adapter) {
+        var option = document.createElement('option');
+        option.value = adapter.address;
+        option.textContent = adapter.label || adapter.address;
+        select.appendChild(option);
+    });
+
+    if (currentValue && !adapters.some(function(adapter) { return adapter.address === currentValue; })) {
+        var missingOption = document.createElement('option');
+        missingOption.value = currentValue;
+        missingOption.textContent = currentValue + ' (Unavailable)';
+        select.appendChild(missingOption);
+    }
+
+    select.value = currentValue;
 }
 
 function requestCatalog() {
