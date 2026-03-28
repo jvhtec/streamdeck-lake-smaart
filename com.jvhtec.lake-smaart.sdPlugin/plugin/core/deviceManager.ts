@@ -260,6 +260,7 @@ export class DeviceManager extends EventEmitter {
         if (target.backend === 'lake') {
             return `${target.backend}:${target.deviceId}:${target.kind}:${target.id}`;
         }
-        return `${target.backend}:${target.deviceId}:${target.kind}:${target.index}`;
+        const targetKey = target.kind === 'output' ? target.id : String(target.index);
+        return `${target.backend}:${target.deviceId}:${target.kind}:${targetKey}`;
     }
 }

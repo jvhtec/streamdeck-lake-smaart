@@ -157,6 +157,8 @@ function updateUI() {
         targetControls.style.display = isSmaart ? 'none' : 'block';
         smaartControls.style.display = isSmaart ? 'block' : 'none';
     }
+
+    syncLevelModeOptions();
 }
 
 function requestCatalog() {
@@ -213,7 +215,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
         const option = document.createElement('option');
         const id = target.backend === 'lake'
             ? `${target.backend}:${target.deviceId}:${target.kind}:${target.id}`
-            : `${target.backend}:${target.deviceId}:${target.kind}:${target.index}`;
+            : `${target.backend}:${target.deviceId}:${target.kind}:${target.kind === 'output' ? target.id : target.index}`;
         option.value = id;
         option.textContent = target.name;
         targetSelect.appendChild(option);
@@ -221,5 +223,37 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     if (selectedTargetId) {
         targetSelect.value = selectedTargetId;
+    }
+
+    syncLevelModeOptions();
+}
+
+function getSelectedCatalogTarget() {
+    const targetSelect = document.getElementById('targetId');
+    if (!targetSelect) return null;
+    const selectedTargetId = targetSelect.value;
+    return (catalog.targets || []).find((target) => {
+        if (target.backend === 'lake') {
+            return `${target.backend}:${target.deviceId}:${target.kind}:${target.id}` === selectedTargetId;
+        }
+        const suffix = target.kind === 'output' ? target.id : target.index;
+        return `${target.backend}:${target.deviceId}:${target.kind}:${suffix}` === selectedTargetId;
+    }) || null;
+}
+
+function syncLevelModeOptions() {
+    const levelMode = document.getElementById('levelMode');
+    if (!levelMode) return;
+
+    const volumeOption = levelMode.querySelector('option[value="volume"]');
+    if (!volumeOption) return;
+
+    const target = getSelectedCatalogTarget();
+    const supportsVolume = Boolean(target && target.supports && target.supports.includes('volume'));
+    volumeOption.hidden = !supportsVolume;
+    volumeOption.disabled = !supportsVolume;
+
+    if (!supportsVolume && levelMode.value === 'volume') {
+        levelMode.value = 'gain';
     }
 }
