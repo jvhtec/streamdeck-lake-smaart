@@ -35,6 +35,8 @@ import {
     pickResolvedControlTarget,
 } from './laApi';
 
+type LaControlTargetDescriptor = Extract<TargetDescriptor, { backend: 'la_http'; kind: 'input' | 'output' }>;
+
 export interface LaHttpSettings {
     discoverySubnet: string;
     discoveryHosts: string[];
@@ -51,6 +53,40 @@ interface OutputSnapshotCacheEntry {
 }
 
 const P1_INPUT_FAMILIES: LaP1IndexedInputFamily[] = ['ana', 'aes', 'avb', 'mic'];
+
+interface P1MuteGroupDefinition {
+    id: string;
+    name: string;
+    family: LaP1IndexedInputFamily;
+    memberIds: string[];
+}
+
+const P1_MUTE_GROUPS: P1MuteGroupDefinition[] = [
+    {
+        id: 'group:ana:1-4',
+        name: 'Analog Inputs 1-4',
+        family: 'ana',
+        memberIds: buildIndexedMemberIds('ana', 1, 4),
+    },
+    {
+        id: 'group:aes:1-4',
+        name: 'AES Inputs 1-4',
+        family: 'aes',
+        memberIds: buildIndexedMemberIds('aes', 1, 4),
+    },
+    {
+        id: 'group:avb:1-4',
+        name: 'AVB Inputs 1-4',
+        family: 'avb',
+        memberIds: buildIndexedMemberIds('avb', 1, 4),
+    },
+    {
+        id: 'group:avb:5-8',
+        name: 'AVB Inputs 5-8',
+        family: 'avb',
+        memberIds: buildIndexedMemberIds('avb', 5, 8),
+    },
+];
 
 export class LaHttpBackend implements Backend {
     public readonly id = 'la_http' as const;
@@ -112,6 +148,9 @@ export class LaHttpBackend implements Backend {
                     family: output.family,
                 });
             });
+            this.buildP1MuteGroupTargets(device.id, outputs, profile).forEach((target) => {
+                targets.push(target);
+            });
         } else {
             this.logDebug(`${host} is LC16D; exposing configuration slots and skipping unsupported mute/level control targets.`);
         }
@@ -140,6 +179,18 @@ export class LaHttpBackend implements Backend {
         const host = this.getDeviceHost(target.deviceId);
         if (target.kind !== 'preset') {
             const outputs = await this.getOutputsSnapshot(host, target.profile);
+            if (Array.isArray(target.memberIds) && target.memberIds.length > 0) {
+                const groupedMembers = this.resolveGroupedMembers(outputs, target);
+                if (!groupedMembers) {
+                    throw new Error(`Grouped control target ${target.id} is missing one or more member inputs from the device snapshot.`);
+                }
+                const muteStates = groupedMembers.map((member) => coerceBoolean(member.state.mute));
+                return {
+                    online: true,
+                    mute: muteStates.every((state) => state !== null) ? muteStates.every((state) => state === true) : undefined,
+                    lastUpdatedMs: Date.now(),
+                };
+            }
             const output = pickResolvedControlTarget(outputs, target.id);
             if (!output) {
                 throw new Error(`Control target ${target.id} is missing from the device snapshot.`);
@@ -165,6 +216,23 @@ export class LaHttpBackend implements Backend {
         }
         const host = this.getDeviceHost(target.deviceId);
         const client = this.createClient(host);
+        if (Array.isArray(target.memberIds) && target.memberIds.length > 0) {
+            const outputs = await this.getOutputsSnapshot(host, target.profile);
+            const groupedMembers = this.resolveGroupedMembers(outputs, target);
+            if (!groupedMembers) {
+                throw new Error(`Grouped control target ${target.id} is missing one or more member inputs from the device snapshot.`);
+            }
+            await Promise.all(
+                groupedMembers.map(async (member) => {
+                    const response = await this.withLimiter(host, () => client.post(laControlPropertyPath(member.path, 'mute'), mute));
+                    if (!isPropertyWriteSuccessStatus(response.status)) {
+                        throw createUnexpectedStatusError(response, [200, 204]);
+                    }
+                })
+            );
+            this.clearOutputSnapshot(host);
+            return;
+        }
         const response = await this.withLimiter(host, () => client.post(laControlPropertyPath(target.path, 'mute'), mute));
         if (!isPropertyWriteSuccessStatus(response.status)) {
             throw createUnexpectedStatusError(response, [200, 204]);
@@ -378,6 +446,55 @@ export class LaHttpBackend implements Backend {
         return outputs;
     }
 
+    private buildP1MuteGroupTargets(
+        deviceId: string,
+        outputs: LaResolvedControlTarget[],
+        profile: LaHttpDeviceProfile
+    ): LaControlTargetDescriptor[] {
+        const isP1LikeProfile =
+            profile === 'p1' ||
+            outputs.some((output) => output.kind === 'input' && typeof output.family === 'string' && P1_INPUT_FAMILIES.includes(output.family as LaP1IndexedInputFamily));
+
+        if (!isP1LikeProfile) {
+            return [];
+        }
+
+        return P1_MUTE_GROUPS
+            .map((group) => {
+                const members = group.memberIds.map((memberId) => pickResolvedControlTarget(outputs, memberId));
+                if (members.some((member) => !member)) {
+                    return null;
+                }
+
+                return {
+                    backend: 'la_http' as const,
+                    deviceId,
+                    kind: 'input' as const,
+                    id: group.id,
+                    name: group.name,
+                    supports: ['mute'] as Array<'mute'>,
+                    path: members[0]?.path || laP1InputSettingsPath(group.family, 1),
+                    profile,
+                    family: group.family,
+                    memberIds: group.memberIds.slice(),
+                };
+            })
+            .filter(Boolean) as LaControlTargetDescriptor[];
+    }
+
+    private resolveGroupedMembers(outputs: LaResolvedControlTarget[], target: LaControlTargetDescriptor): LaResolvedControlTarget[] | null {
+        if (!Array.isArray(target.memberIds) || target.memberIds.length === 0) {
+            return null;
+        }
+
+        const members = target.memberIds.map((memberId) => pickResolvedControlTarget(outputs, memberId));
+        if (members.some((member) => !member)) {
+            return null;
+        }
+
+        return members as LaResolvedControlTarget[];
+    }
+
     private async readConfigurationLibrary(
         client: LaHttpClient,
         host: string,
@@ -521,4 +638,8 @@ function safeParseConfigurationLibrary(value: unknown): LaConfigurationSlot[] | 
     } catch {
         return null;
     }
+}
+
+function buildIndexedMemberIds(family: LaP1IndexedInputFamily, start: number, end: number): string[] {
+    return Array.from({ length: end - start + 1 }, (_, offset) => `${family}:${start + offset}`);
 }

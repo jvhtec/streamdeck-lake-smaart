@@ -53,10 +53,10 @@ async function startMockLakeServer(options = {}) {
         lastPreset: null,
         routerCount: Number.isInteger(options.routerCount) ? options.routerCount : DEFAULT_ROUTER_COUNT,
         modules: {
-            A: { mute: false, gain: 0.0 },
-            B: { mute: false, gain: 0.0 },
-            C: { mute: false, gain: 0.0 },
-            D: { mute: false, gain: 0.0 },
+            A: { mute: false, gain: 0.0, outputChannels: 1, outputMutes: { 1: false } },
+            B: { mute: false, gain: 0.0, outputChannels: 1, outputMutes: { 1: false } },
+            C: { mute: false, gain: 0.0, outputChannels: 1, outputMutes: { 1: false } },
+            D: { mute: false, gain: 0.0, outputChannels: 1, outputMutes: { 1: false } },
         },
         routers: {},
     };
@@ -97,7 +97,7 @@ async function startMockLakeServer(options = {}) {
                 productFlag: state.productFlag,
                 destIdHi: DLM_BROADCAST_IDHI,
                 destIdLo: DLM_BROADCAST_IDLO,
-                srcClass: DLM_DEVICE_CLASS_ID,
+                srcClass: Number.isInteger(options.broadcastSrcClass) ? options.broadcastSrcClass : DLM_DEVICE_CLASS_ID,
             });
             await sendPacket(socket, reply, rinfo.port, rinfo.address);
             log(runtime, `Heartbeat reply sent for ${runtime.frameId}`);
@@ -192,6 +192,34 @@ function applyCommand(state, command) {
     if (match) {
         const moduleId = match[1];
         state.modules[moduleId].gain = parseFloat(match[2]);
+        return { type: 'ack', result: ACK_SUCCESS };
+    }
+
+    match = command.match(/^Mod\.Out\.Chans\?([A-D])$/);
+    if (match) {
+        const moduleId = match[1];
+        return { type: 'response', payload: `${state.modules[moduleId].outputChannels}` };
+    }
+
+    match = command.match(/^Mod\.Out\.Mute\?([A-D])\s+([1-6])$/);
+    if (match) {
+        const moduleId = match[1];
+        const channel = parseInt(match[2], 10);
+        if (channel > state.modules[moduleId].outputChannels) {
+            return { type: 'ack', result: ACK_BAD_PARAM };
+        }
+        const mute = state.modules[moduleId].outputMutes[channel] ? 1 : 0;
+        return { type: 'response', payload: `Mod.Out.Mute=${moduleId} ${channel} ${mute}` };
+    }
+
+    match = command.match(/^Mod\.Out\.Mute=([A-D])\s+([1-6])\s+([01])$/);
+    if (match) {
+        const moduleId = match[1];
+        const channel = parseInt(match[2], 10);
+        if (channel > state.modules[moduleId].outputChannels) {
+            return { type: 'ack', result: ACK_BAD_PARAM };
+        }
+        state.modules[moduleId].outputMutes[channel] = match[3] === '1';
         return { type: 'ack', result: ACK_SUCCESS };
     }
 

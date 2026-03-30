@@ -57,6 +57,21 @@ const defaultSettings = {
     smaartHost: '127.0.0.1',
     smaartPort: 26000,
 };
+const discoverySettingKeys = [
+    'lakeHost',
+    'lakePort',
+    'lakeBindAddress',
+    'lakeDebug',
+    'laBindAddress',
+    'laDiscoverySubnet',
+    'laDiscoveryHosts',
+    'laAuthUser',
+    'laAuthPass',
+    'laDebugLogging',
+    'smaartHost',
+    'smaartPort',
+] as const;
+let currentDiscoverySettings: Record<string, any> = {};
 
 const dlmClient = new DlmClient({
     host: defaultSettings.lakeHost,
@@ -122,6 +137,26 @@ function buildInspectorCatalog() {
     };
 }
 
+function resolveLakeBackendSettings(settings: Record<string, any>, port: number, debug: boolean) {
+    const adapters = listIpv4Adapters();
+    const configuredBindAddress = String(settings.lakeBindAddress || defaultSettings.lakeBindAddress || '').trim();
+    const selectedAdapter = findIpv4AdapterByAddress(configuredBindAddress, adapters);
+
+    if (configuredBindAddress && !selectedAdapter) {
+        logPluginMessage(`[Lake] Selected adapter IP ${configuredBindAddress} is no longer available on this machine.`);
+    }
+
+    return {
+        host: settings.lakeHost || defaultSettings.lakeHost,
+        port,
+        bindAddress: selectedAdapter?.address || undefined,
+        bindNetmask: selectedAdapter?.netmask || undefined,
+        debug,
+        adapter: selectedAdapter,
+        configuredBindAddress,
+    };
+}
+
 function resolveLaBackendSettings(settings: Record<string, any>) {
     const adapters = listIpv4Adapters();
     const configuredBindAddress = String(settings.laBindAddress || defaultSettings.laBindAddress || '').trim();
@@ -151,6 +186,100 @@ function resolveLaBackendSettings(settings: Record<string, any>) {
         adapter: selectedAdapter,
         configuredSubnet,
     };
+}
+
+function isEmptyDiscoveryValue(value: unknown) {
+    return value == null || (typeof value === 'string' && value.trim() === '');
+}
+
+function mergeDiscoverySettings(
+    base: Record<string, any>,
+    overrides: Record<string, any>,
+    options: { ignoreEmptyValues?: boolean } = {}
+) {
+    const next = { ...base };
+    discoverySettingKeys.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(overrides, key)) {
+            if (options.ignoreEmptyValues && isEmptyDiscoveryValue(overrides[key])) {
+                return;
+            }
+            next[key] = overrides[key];
+        }
+    });
+    return next;
+}
+
+function hasDiscoverySettings(settings: Record<string, any> | undefined | null) {
+    if (!settings) {
+        return false;
+    }
+
+    return discoverySettingKeys.some((key) => Object.prototype.hasOwnProperty.call(settings, key));
+}
+
+function applyDiscoverySettings(settings: Record<string, any>, options: { ignoreEmptyValues?: boolean } = {}) {
+    currentDiscoverySettings = mergeDiscoverySettings(currentDiscoverySettings, settings, options);
+
+    const configuredLakePort = Number(currentDiscoverySettings.lakePort);
+    const usesLegacyLakePort = !configuredLakePort || configuredLakePort === 1024;
+    const resolvedLakePort = usesLegacyLakePort ? defaultSettings.lakePort : configuredLakePort;
+    const resolvedLakeDebug =
+        currentDiscoverySettings.lakeDebug === true ||
+        currentDiscoverySettings.lakeDebug === 'true' ||
+        currentDiscoverySettings.lakeDebug === '1';
+
+    const resolvedLake = resolveLakeBackendSettings(currentDiscoverySettings, resolvedLakePort, resolvedLakeDebug);
+    lakeBackend.updateSettings({
+        host: resolvedLake.host,
+        port: resolvedLake.port,
+        bindAddress: resolvedLake.bindAddress,
+        bindNetmask: resolvedLake.bindNetmask,
+        debug: resolvedLake.debug,
+    });
+    if (resolvedLakeDebug) {
+        const bindingDetail = resolvedLake.adapter
+            ? `adapter ${resolvedLake.adapter.name} (${resolvedLake.adapter.address}/${resolvedLake.adapter.prefixLength})`
+            : resolvedLake.configuredBindAddress
+                ? `adapter IP ${resolvedLake.configuredBindAddress} (unavailable)`
+                : 'system routing';
+        logPluginMessage(`[Lake] Using ${bindingDetail}; discovery port ${resolvedLakePort}.`);
+    }
+
+    const resolvedLa = resolveLaBackendSettings(currentDiscoverySettings);
+    laHttpBackend.updateSettings({
+        bindAddress: resolvedLa.bindAddress,
+        discoverySubnet: resolvedLa.discoverySubnet,
+        discoveryHosts: resolvedLa.discoveryHosts,
+        username: resolvedLa.username,
+        password: resolvedLa.password,
+        debugLogging: resolvedLa.debugLogging,
+    });
+    if (resolvedLa.debugLogging) {
+        const bindingDetail = resolvedLa.adapter
+            ? `adapter ${resolvedLa.adapter.name} (${resolvedLa.adapter.address}/${resolvedLa.adapter.prefixLength})`
+            : resolvedLa.bindAddress
+                ? `adapter IP ${resolvedLa.bindAddress}`
+                : 'system routing';
+        const subnetDetail = resolvedLa.discoverySubnet || 'manual hosts only';
+        logPluginMessage(`[LA] Using ${bindingDetail}; discovery subnet ${subnetDetail}.`);
+    }
+
+    smaartClient.setTarget(
+        currentDiscoverySettings.smaartHost || defaultSettings.smaartHost,
+        Number(currentDiscoverySettings.smaartPort) || defaultSettings.smaartPort
+    );
+    smaartClient.connect();
+
+    if (usesLegacyLakePort && settings !== currentDiscoverySettings) {
+        sdClient.setGlobalSettings({
+            ...currentDiscoverySettings,
+            lakePort: resolvedLakePort,
+        });
+        currentDiscoverySettings = {
+            ...currentDiscoverySettings,
+            lakePort: resolvedLakePort,
+        };
+    }
 }
 
 function mapSmaartSplCatalog(response: any) {
@@ -276,6 +405,7 @@ sdClient.onEvents((event) => {
     }
     if (event.event === 'propertyInspectorDidAppear') {
         openInspectorContexts.add(event.context);
+        sdClient.sendToPropertyInspector(event.context, buildInspectorCatalog());
     }
     if (event.event === 'willDisappear') {
         openInspectorContexts.delete(event.context);
@@ -283,55 +413,19 @@ sdClient.onEvents((event) => {
 
     if (event.event === 'didReceiveGlobalSettings') {
         const settings = event.payload.settings || {};
-        const configuredLakePort = Number(settings.lakePort);
-        const usesLegacyLakePort = !configuredLakePort || configuredLakePort === 1024;
-        const resolvedLakePort = usesLegacyLakePort ? defaultSettings.lakePort : configuredLakePort;
-        const resolvedLakeDebug =
-            settings.lakeDebug === true ||
-            settings.lakeDebug === 'true' ||
-            settings.lakeDebug === '1';
-
-        if (usesLegacyLakePort) {
-            sdClient.setGlobalSettings({
-                ...settings,
-                lakePort: resolvedLakePort,
-            });
-        }
-
-        lakeBackend.updateSettings({
-            host: settings.lakeHost || defaultSettings.lakeHost,
-            port: resolvedLakePort,
-            bindAddress: settings.lakeBindAddress || defaultSettings.lakeBindAddress,
-            debug: resolvedLakeDebug,
-        });
-        const resolvedLa = resolveLaBackendSettings(settings);
-        laHttpBackend.updateSettings({
-            bindAddress: resolvedLa.bindAddress,
-            discoverySubnet: resolvedLa.discoverySubnet,
-            discoveryHosts: resolvedLa.discoveryHosts,
-            username: resolvedLa.username,
-            password: resolvedLa.password,
-            debugLogging: resolvedLa.debugLogging,
-        });
-        if (resolvedLa.debugLogging) {
-            const bindingDetail = resolvedLa.adapter
-                ? `adapter ${resolvedLa.adapter.name} (${resolvedLa.adapter.address}/${resolvedLa.adapter.prefixLength})`
-                : resolvedLa.bindAddress
-                    ? `adapter IP ${resolvedLa.bindAddress}`
-                    : 'system routing';
-            const subnetDetail = resolvedLa.discoverySubnet || 'manual hosts only';
-            logPluginMessage(`[LA] Using ${bindingDetail}; discovery subnet ${subnetDetail}.`);
-        }
-        smaartClient.setTarget(
-            settings.smaartHost || defaultSettings.smaartHost,
-            Number(settings.smaartPort) || defaultSettings.smaartPort
-        );
-        smaartClient.connect();
+        applyDiscoverySettings(settings);
+        deviceManager.refreshCatalog().catch(() => undefined);
+    }
+    if ((event.event === 'didReceiveSettings' || event.event === 'willAppear') && hasDiscoverySettings(event.payload?.settings)) {
+        applyDiscoverySettings(event.payload.settings || {}, { ignoreEmptyValues: true });
         deviceManager.refreshCatalog().catch(() => undefined);
     }
     if (event.event === 'sendToPlugin') {
         const request = event.payload?.request;
         if (request === 'catalog') {
+            if (hasDiscoverySettings(event.payload?.discoverySettings)) {
+                applyDiscoverySettings(event.payload.discoverySettings || {});
+            }
             deviceManager.refreshCatalog().then(() => {
                 sdClient.sendToPropertyInspector(event.context, buildInspectorCatalog());
             });

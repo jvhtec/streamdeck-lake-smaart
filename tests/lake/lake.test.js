@@ -7,6 +7,7 @@ const { startMockLakeServer } = require('../../scripts/mock-lake-dlm');
 
 const distRoot = path.join(__dirname, '..', '..', 'com.jvhtec.lake-smaart.sdPlugin', 'dist');
 const { buildInspectorDevices } = require(path.join(distRoot, 'core', 'inspectorCatalog.js'));
+const { deriveBroadcastAddress } = require(path.join(distRoot, 'core', 'networkAdapters.js'));
 const { LakeBackend } = require(path.join(distRoot, 'backends', 'lakeBackend.js'));
 const { PriorityAction } = require(path.join(distRoot, 'actions', 'priorityAction.js'));
 const { DlmClient } = require(path.join(distRoot, 'lake', 'dlmClient.js'));
@@ -113,10 +114,11 @@ test('LakeBackend exposes router targets and reads/writes forced input priority'
 
     const targets = await backend.getTargets(devices[0]);
     const routerTargets = targets.filter((target) => target.kind === 'router');
-    assert.equal(routerTargets.length, 4);
-    assert.deepEqual(routerTargets.map((target) => target.id), ['1', '2', '3', '4']);
+    assert.equal(routerTargets.length, 5);
+    assert.deepEqual(routerTargets.map((target) => target.id), ['ALL', '1', '2', '3', '4']);
 
-    const router1 = routerTargets[0];
+    const router1 = routerTargets.find((target) => target.id === '1');
+    assert.ok(router1);
     const initialState = await backend.getState(router1);
     assert.equal(initialState.priorityMode, 'auto');
 
@@ -154,8 +156,132 @@ test('LakeBackend probes higher-count router targets for LMX-style frames', asyn
     const targets = await backend.getTargets(device);
     const routerTargets = targets.filter((target) => target.kind === 'router');
 
-    assert.equal(routerTargets.length, 16);
-    assert.equal(routerTargets[15].id, '16');
+    assert.equal(routerTargets.length, 17);
+    assert.equal(routerTargets[0].id, 'ALL');
+    assert.equal(routerTargets[16].id, '16');
+});
+
+test('LakeBackend exposes an All Routers target and applies grouped priority writes', async (t) => {
+    const server = await startMockLakeServer({
+        port: 0,
+        bindAddress: '127.0.0.1',
+        verbose: false,
+        banner: false,
+        routerCount: 4,
+    });
+    t.after(async () => server.close());
+
+    const client = new DlmClient({
+        host: '127.0.0.1',
+        port: server.port,
+        bindAddress: '127.0.0.1',
+    });
+    t.after(() => client.close());
+
+    const backend = new LakeBackend(client, {
+        host: '127.0.0.1',
+        port: server.port,
+        bindAddress: '127.0.0.1',
+        debug: false,
+    });
+
+    const [device] = await backend.discover();
+    const targets = await backend.getTargets(device);
+    const allRoutersTarget = targets.find((target) => target.kind === 'router' && target.id === 'ALL');
+
+    assert.ok(allRoutersTarget);
+    assert.equal(allRoutersTarget.name, 'All Routers');
+
+    await backend.setPriority(allRoutersTarget, '4');
+    const groupedState = await backend.getState(allRoutersTarget);
+    assert.equal(groupedState.priorityMode, '4');
+    assert.deepEqual(
+        Object.values(server.state.routers).map((router) => router.forcePriority),
+        [4, 4, 4, 4]
+    );
+
+    server.state.routers[3].forcePriority = 1;
+    const mixedState = await backend.getState(allRoutersTarget);
+    assert.equal(mixedState.priorityMode, undefined);
+});
+
+test('LakeBackend exposes an All Modules target and applies grouped mute writes', async (t) => {
+    const server = await startMockLakeServer({
+        port: 0,
+        bindAddress: '127.0.0.1',
+        verbose: false,
+        banner: false,
+    });
+    t.after(async () => server.close());
+
+    const client = new DlmClient({
+        host: '127.0.0.1',
+        port: server.port,
+        bindAddress: '127.0.0.1',
+    });
+    t.after(() => client.close());
+
+    const backend = new LakeBackend(client, {
+        host: '127.0.0.1',
+        port: server.port,
+        bindAddress: '127.0.0.1',
+        debug: false,
+    });
+
+    const [device] = await backend.discover();
+    const targets = await backend.getTargets(device);
+    const allModulesTarget = targets.find((target) => target.kind === 'group' && target.id === 'ALL');
+
+    assert.ok(allModulesTarget);
+    assert.equal(allModulesTarget.name, 'All Modules');
+
+    await backend.setMute(allModulesTarget, true);
+    const mutedState = await backend.getState(allModulesTarget);
+    assert.equal(mutedState.mute, true);
+
+    await backend.setMute(allModulesTarget, false);
+    const unmutedState = await backend.getState(allModulesTarget);
+    assert.equal(unmutedState.mute, false);
+});
+
+test('LakeBackend applies grouped level writes for the All Modules target', async (t) => {
+    const server = await startMockLakeServer({
+        port: 0,
+        bindAddress: '127.0.0.1',
+        verbose: false,
+        banner: false,
+    });
+    t.after(async () => server.close());
+
+    const client = new DlmClient({
+        host: '127.0.0.1',
+        port: server.port,
+        bindAddress: '127.0.0.1',
+    });
+    t.after(() => client.close());
+
+    const backend = new LakeBackend(client, {
+        host: '127.0.0.1',
+        port: server.port,
+        bindAddress: '127.0.0.1',
+        debug: false,
+    });
+
+    const [device] = await backend.discover();
+    const targets = await backend.getTargets(device);
+    const allModulesTarget = targets.find((target) => target.kind === 'group' && target.id === 'ALL');
+
+    assert.ok(allModulesTarget);
+    assert.equal(allModulesTarget.name, 'All Modules');
+    assert.ok(allModulesTarget.supports.includes('level'));
+
+    await backend.setLevel(allModulesTarget, -6, 'gain');
+    const groupedState = await backend.getState(allModulesTarget);
+    assert.equal(groupedState.levelDb, -6);
+    assert.deepEqual(
+        ['A', 'B', 'C', 'D'].map((moduleId) => server.state.modules[moduleId].gain),
+        [-6, -6, -6, -6]
+    );
 });
 
 test('PriorityAction maps push-count mode to the expected Lake priority', async () => {
@@ -303,4 +429,32 @@ test('DlmClient clears cached discoveries when the Lake routing filter changes',
     client.updateConfig({ host: '10.255.255.10' });
 
     assert.equal(client.getKnownUnits().length, 0);
+});
+
+test('deriveBroadcastAddress returns the directed broadcast for a selected Lake adapter', () => {
+    assert.equal(deriveBroadcastAddress('169.254.158.10', '255.255.0.0'), '169.254.255.255');
+    assert.equal(deriveBroadcastAddress('192.168.10.25', '255.255.255.0'), '192.168.10.255');
+    assert.equal(deriveBroadcastAddress('not-an-ip', '255.255.255.0'), null);
+});
+
+test('DlmClient accepts discovery broadcasts from Lake class 8 devices', async (t) => {
+    const server = await startMockLakeServer({
+        port: 0,
+        bindAddress: '127.0.0.1',
+        verbose: false,
+        banner: false,
+        broadcastSrcClass: 8,
+    });
+    t.after(async () => server.close());
+
+    const client = new DlmClient({
+        host: '127.0.0.1',
+        port: server.port,
+        bindAddress: '127.0.0.1',
+    });
+    t.after(() => client.close());
+
+    const discovered = await client.discoverUnits(300);
+    assert.equal(discovered.length, 1);
+    assert.equal(discovered[0].classId, 8);
 });

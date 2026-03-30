@@ -1,6 +1,7 @@
 import { randomBytes } from 'crypto';
 import dgram from 'dgram';
 import { EventEmitter } from 'events';
+import { deriveBroadcastAddress } from '../core/networkAdapters';
 import {
     ACK_SUCCESS,
     DLM_ALL_CLASS_MASK,
@@ -10,6 +11,7 @@ import {
     DLM_DYNAMIC_DEVICE_PORT,
     DLM_FIXED_DEVICE_PORT,
     DLM_FIXED_RESPONSE_PORT,
+    DLM_HOST_CLASS_ID,
     DlmMessagePacket,
     DlmBroadcastAnnouncement,
     describePacket,
@@ -25,6 +27,7 @@ export interface DlmClientConfig {
     host: string;
     port: number;
     bindAddress?: string;
+    bindNetmask?: string;
     debug?: boolean;
 }
 
@@ -67,6 +70,7 @@ export class DlmClient extends EventEmitter {
     private hostFilter: string;
     private port: number;
     private bindAddress: string;
+    private bindNetmask: string;
     private debug: boolean;
     private isOnline = false;
 
@@ -84,6 +88,7 @@ export class DlmClient extends EventEmitter {
         this.hostFilter = config.host ?? '';
         this.port = config.port ?? DLM_DYNAMIC_DEVICE_PORT;
         this.bindAddress = config.bindAddress?.trim() || '';
+        this.bindNetmask = config.bindNetmask?.trim() || '';
         this.debug = Boolean(config.debug);
 
         this.socket = this.createSocket();
@@ -95,6 +100,7 @@ export class DlmClient extends EventEmitter {
         const previousMode = this.getResponseMode();
         const previousHostFilter = this.hostFilter;
         const previousBindAddress = this.bindAddress;
+        const previousBindNetmask = this.bindNetmask;
 
         if (config.host !== undefined) {
             this.hostFilter = config.host;
@@ -105,6 +111,9 @@ export class DlmClient extends EventEmitter {
         if (config.bindAddress !== undefined) {
             this.bindAddress = config.bindAddress.trim();
         }
+        if (config.bindNetmask !== undefined) {
+            this.bindNetmask = config.bindNetmask.trim();
+        }
         if (config.debug !== undefined) {
             this.debug = Boolean(config.debug);
         }
@@ -113,7 +122,11 @@ export class DlmClient extends EventEmitter {
             this.recreateSocket();
         }
 
-        if (previousHostFilter !== this.hostFilter || previousBindAddress !== this.bindAddress) {
+        if (
+            previousHostFilter !== this.hostFilter ||
+            previousBindAddress !== this.bindAddress ||
+            previousBindNetmask !== this.bindNetmask
+        ) {
             this.knownUnits.clear();
         }
     }
@@ -377,7 +390,8 @@ export class DlmClient extends EventEmitter {
 
     private handleDiscoveryAnnouncement(announcement: DlmBroadcastAnnouncement, ip: string) {
         const baseClass = announcement.header.srcClass & ~DLM_ALL_CLASS_MASK;
-        if (baseClass !== DLM_DEVICE_CLASS_ID) {
+        if (baseClass === 0 || baseClass === DLM_HOST_CLASS_ID) {
+            this.trace(`Ignored discovery announcement from class ${baseClass || announcement.header.srcClass}`);
             return;
         }
 
@@ -423,6 +437,16 @@ export class DlmClient extends EventEmitter {
 
         if (isLoopbackAddress(this.bindAddress)) {
             destinations.add(this.bindAddress);
+        }
+
+        const directedBroadcast =
+            this.bindAddress &&
+            this.bindNetmask &&
+            !isLoopbackAddress(this.bindAddress)
+                ? deriveBroadcastAddress(this.bindAddress, this.bindNetmask)
+                : null;
+        if (directedBroadcast && directedBroadcast !== this.bindAddress) {
+            destinations.add(directedBroadcast);
         }
 
         const allLoopback = Array.from(destinations).every((address) => isLoopbackAddress(address));

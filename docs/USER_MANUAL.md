@@ -47,7 +47,7 @@ The inspector also auto-refreshes after adapter and other global discovery chang
 **Property inspector settings**
 
 - Device: Auto-detected Lake device with at least one valid level target on the selected NIC.
-- Target: Lake module/group target.
+- Target: Lake module/group target, including `All Modules`.
 - Mode: Gain (dB) or Volume (only when the selected target supports it).
 - Step Size: Increment per tick.
 - Min/Max: Clamp values for safety.
@@ -74,7 +74,7 @@ The inspector also auto-refreshes after adapter and other global discovery chang
 **Property inspector settings**
 
 - Device: Auto-detected Lake device with at least one valid mute target on the selected NIC.
-- Target: Lake module/group target.
+- Target: Lake module/group target, including `All Modules`.
 - Momentary: Enable to mute while the key is held.
 
 ### L-Acoustics Mute (Button)
@@ -85,7 +85,7 @@ The inspector also auto-refreshes after adapter and other global discovery chang
 **Property inspector settings**
 
 - Device: Auto-detected L-Acoustics device with at least one valid mute target on the selected NIC.
-- Target: P1 input target or amplified-controller output target that exposes mute.
+- Target: P1 input target, grouped P1 input bank such as `Analog Inputs 1-4`, `AES Inputs 1-4`, `AVB Inputs 1-4`, or `AVB Inputs 5-8`, or an amplified-controller output target that exposes mute.
 - Momentary: Enable to mute while the key is held.
 
 ### Lake Preset Recall (Button)
@@ -112,13 +112,13 @@ The inspector also auto-refreshes after adapter and other global discovery chang
 
 ### Lake Input Priority (Button)
 
-- **Press**: Forces the selected Lake input router to the configured priority mode.
-- **State**: The key lights its active state when the selected router is already using that forced priority mode.
+- **Press**: Forces the selected Lake input router, or `All Routers`, to the configured priority mode.
+- **State**: The key lights its active state when the selected router target is already using that forced priority mode. For `All Routers`, the key lights only when every discovered router on that frame matches.
 
 **Property inspector settings**
 
 - Device: Auto-detected Lake device with at least one reachable input router on the selected NIC.
-- Target: Lake input router target discovered on that frame, such as `Router 1` or `Router 16`.
+- Target: Lake input router target discovered on that frame, including `All Routers` when the frame exposes more than one router.
 - Trigger: `Fixed Priority` or `Push Count`.
 - Priority: Used in `Fixed Priority` mode for `Auto Select`, `Force Priority 1`, `Force Priority 2`, `Force Priority 3`, or `Force Priority 4`.
 - Push Count mode: One quick press selects `Priority 1`, two quick presses selects `Priority 2`, three selects `Priority 3`, and four selects `Priority 4`.

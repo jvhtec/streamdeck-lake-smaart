@@ -73,6 +73,7 @@ let websocket = null;
 let action = '';
 let context = '';
 let catalog = { devices: [], targets: [], laAdapters: [] };
+let catalogLoaded = false;
 let pendingDeviceId = null;
 let pendingTargetId = null;
 let lastGlobalSettings = {};
@@ -80,6 +81,47 @@ let lastSettings = {};
 let smaartSplCatalog = { inputs: [], metrics: [], error: '' };
 let smaartSplRequestSeq = 0;
 let catalogRefreshTimer = null;
+const discoveryFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+
+function mergeDiscoveryFieldValues(base, source) {
+    var next = Object.assign({}, base || {});
+    if (!source) {
+        return next;
+    }
+    discoveryFields.forEach(function(field) {
+        if (Object.prototype.hasOwnProperty.call(source, field)) {
+            next[field] = source[field];
+        }
+    });
+    return next;
+}
+
+function applyDiscoveryFieldValues(settings) {
+    lastGlobalSettings = mergeDiscoveryFieldValues(lastGlobalSettings, settings);
+    discoveryFields.forEach(function(field) {
+        var el = document.getElementById(field);
+        if (!el || lastGlobalSettings[field] === undefined) {
+            return;
+        }
+        if (el.type === 'checkbox') {
+            el.checked = lastGlobalSettings[field] === true || lastGlobalSettings[field] === 'true' || lastGlobalSettings[field] === '1';
+        } else {
+            el.value = lastGlobalSettings[field];
+        }
+    });
+    updateLakeAdapterOptions(lastGlobalSettings.lakeBindAddress);
+    updateLaAdapterOptions(lastGlobalSettings.laBindAddress);
+}
+
+function getDiscoveryFieldValues() {
+    var values = mergeDiscoveryFieldValues({}, lastGlobalSettings);
+    discoveryFields.forEach(function(field) {
+        var el = document.getElementById(field);
+        if (!el) return;
+        values[field] = el.type === 'checkbox' ? el.checked : (el.value || '');
+    });
+    return values;
+}
 
 function getActionName() {
     var parts = action.split('.');
@@ -182,6 +224,7 @@ function getRequiredCatalogAction() {
         }
         if (msg.type === 'catalog') {
             catalog = { devices: msg.devices || [], targets: msg.targets || [], laAdapters: msg.laAdapters || [] };
+            catalogLoaded = true;
             updateLakeAdapterOptions(lastGlobalSettings.lakeBindAddress);
             updateLaAdapterOptions(lastGlobalSettings.laBindAddress);
             var devId = pendingDeviceId;
@@ -204,16 +247,16 @@ function getRequiredCatalogAction() {
 
 function loadSettings(settings) {
     lastSettings = Object.assign({}, settings);
-    const globalFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(function(input) {
-        if (!input.id || globalFields.includes(input.id)) return;
+        if (!input.id || discoveryFields.includes(input.id)) return;
         if (input.type === 'checkbox') {
             input.checked = Boolean(settings[input.id]);
         } else {
             input.value = settings[input.id] != null ? settings[input.id] : '';
         }
     });
+    applyDiscoveryFieldValues(settings);
     if (catalog.devices.length > 0 || catalog.targets.length > 0) {
         updateSelectors(settings.deviceId, settings.targetId);
     } else {
@@ -225,20 +268,7 @@ function loadSettings(settings) {
 }
 
 function loadGlobalSettings(settings) {
-    lastGlobalSettings = Object.assign({}, settings);
-    var fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
-    fields.forEach(function(field) {
-        var el = document.getElementById(field);
-        if (el && settings[field] !== undefined) {
-            if (el.type === 'checkbox') {
-                el.checked = settings[field] === true || settings[field] === 'true' || settings[field] === '1';
-            } else {
-                el.value = settings[field];
-            }
-        }
-    });
-    updateLakeAdapterOptions(settings.lakeBindAddress);
-    updateLaAdapterOptions(settings.laBindAddress);
+    applyDiscoveryFieldValues(settings);
     if (isSmaartSplAction()) {
         requestSmaartSplCatalog();
     }
@@ -248,41 +278,41 @@ function loadGlobalSettings(settings) {
 
 function saveSettings() {
     if (!websocket) return;
-    var globalFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
     var settings = {};
     var inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(function(input) {
-        if (!input.id || globalFields.includes(input.id)) return;
+        if (!input.id || discoveryFields.includes(input.id)) return;
         if (input.type === 'checkbox') {
             settings[input.id] = input.checked;
         } else {
             settings[input.id] = input.value;
         }
     });
+    var mergedSettings = Object.assign({}, settings, getDiscoveryFieldValues());
     websocket.send(JSON.stringify({
         type: 'setSettings',
         context: context,
-        settings: settings
+        settings: mergedSettings
     }));
-    lastSettings = Object.assign({}, settings);
+    lastSettings = Object.assign({}, mergedSettings);
     updateSelectors(settings.deviceId, settings.targetId);
     updateSmaartSplSelectors(settings.splStreamEndpoint, settings.splMetric);
 }
 
 function saveGlobalSettings() {
     if (!websocket) return;
-    var payload = Object.assign({}, lastGlobalSettings);
-    var fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
-    fields.forEach(function(field) {
-        var el = document.getElementById(field);
-        if (el) {
-            payload[field] = el.type === 'checkbox' ? el.checked : (el.value || '');
-        }
-    });
+    var payload = getDiscoveryFieldValues();
+    lastGlobalSettings = Object.assign({}, payload);
     websocket.send(JSON.stringify({
         type: 'setGlobalSettings',
         settings: payload
     }));
+    websocket.send(JSON.stringify({
+        type: 'setSettings',
+        context: context,
+        settings: Object.assign({}, lastSettings, payload)
+    }));
+    lastSettings = Object.assign({}, lastSettings, payload);
     if (isSmaartSplAction()) {
         setTimeout(requestSmaartSplCatalog, 0);
     }
@@ -309,7 +339,7 @@ function updateLaAdapterOptions(selectedAddress) {
         select.appendChild(option);
     });
 
-    if (currentValue && !adapters.some(function(adapter) { return adapter.address === currentValue; })) {
+    if (catalogLoaded && currentValue && !adapters.some(function(adapter) { return adapter.address === currentValue; })) {
         var missingOption = document.createElement('option');
         missingOption.value = currentValue;
         missingOption.textContent = currentValue + ' (Unavailable)';
@@ -339,7 +369,7 @@ function updateLakeAdapterOptions(selectedAddress) {
         select.appendChild(option);
     });
 
-    if (currentValue && !adapters.some(function(adapter) { return adapter.address === currentValue; })) {
+    if (catalogLoaded && currentValue && !adapters.some(function(adapter) { return adapter.address === currentValue; })) {
         var missingOption = document.createElement('option');
         missingOption.value = currentValue;
         missingOption.textContent = currentValue + ' (Unavailable)';
@@ -351,7 +381,10 @@ function updateLakeAdapterOptions(selectedAddress) {
 
 function requestCatalog() {
     if (!websocket) return;
-    websocket.send(JSON.stringify({ type: 'getCatalog' }));
+    websocket.send(JSON.stringify({
+        type: 'getCatalog',
+        discoverySettings: getDiscoveryFieldValues()
+    }));
 }
 
 function refreshCatalog() {
@@ -531,6 +564,15 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     if (!deviceSelect || !targetSelect) return;
     if (isSmaartAction()) return;
 
+    var currentDeviceId = deviceSelect.value || '';
+    var currentTargetId = targetSelect.value || '';
+    var preferredDeviceId = selectedDeviceId !== undefined
+        ? selectedDeviceId
+        : (lastSettings.deviceId || currentDeviceId);
+    var preferredTargetId = selectedTargetId !== undefined
+        ? selectedTargetId
+        : (lastSettings.targetId || currentTargetId);
+
     var devices = (catalog.devices || []).filter(function(device) {
         return deviceSupportsRequiredAction(device);
     });
@@ -553,9 +595,9 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     if (noDevices) noDevices.style.display = 'none';
 
-    var activeDevice = devices.some(function(device) { return device.id === selectedDeviceId; })
-        ? selectedDeviceId
-        : (deviceSelect.value || devices[0].id);
+    var activeDevice = devices.some(function(device) { return device.id === preferredDeviceId; })
+        ? preferredDeviceId
+        : devices[0].id;
     deviceSelect.value = activeDevice;
 
     var filteredTargets = targets.filter(function(target) {
@@ -571,8 +613,8 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
         targetSelect.appendChild(option);
     });
 
-    if (selectedTargetId && filteredTargets.some(function(target) { return buildCatalogTargetId(target) === selectedTargetId; })) {
-        targetSelect.value = selectedTargetId;
+    if (preferredTargetId && filteredTargets.some(function(target) { return buildCatalogTargetId(target) === preferredTargetId; })) {
+        targetSelect.value = preferredTargetId;
     } else if (targetSelect.options.length > 0) {
         targetSelect.value = targetSelect.options[0].value;
     }

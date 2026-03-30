@@ -84,6 +84,11 @@
                     "Image": "images/icon_lake_mute_new_1774708444270",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
+                },
+                {
+                    "Image": "images/icon_muted",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
                 }
             ]
         },
@@ -98,6 +103,11 @@
             "States": [
                 {
                     "Image": "images/icon_la_mute_new_1774708498859",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                },
+                {
+                    "Image": "images/icon_muted",
                     "TitleAlignment": "middle",
                     "FontSize": "16"
                 }

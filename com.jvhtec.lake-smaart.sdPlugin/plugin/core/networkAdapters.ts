@@ -81,6 +81,22 @@ export function deriveDiscoverySubnet(address: string, netmask: string): string 
     return `${intToIpv4(networkInt)}/${effectivePrefixLength}`;
 }
 
+export function deriveBroadcastAddress(address: string, netmask: string): string | null {
+    if (prefixLengthFromNetmask(netmask) === null) {
+        return null;
+    }
+
+    const addressInt = ipv4ToInt(address);
+    const maskInt = ipv4ToInt(netmask);
+    if (addressInt === null || maskInt === null) {
+        return null;
+    }
+
+    const networkInt = addressInt & maskInt;
+    const broadcastInt = (networkInt | (~maskInt >>> 0)) >>> 0;
+    return intToIpv4(broadcastInt);
+}
+
 export function prefixLengthFromNetmask(netmask: string): number | null {
     const value = ipv4ToInt(netmask);
     if (value === null) {

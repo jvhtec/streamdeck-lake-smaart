@@ -4,10 +4,13 @@ import {
     buildGetForceInputPriority,
     buildGetGain,
     buildGetMute,
+    buildGetOutputChannels,
+    buildGetOutputMute,
     buildRecallPreset,
     buildSetForceInputPriority,
     buildSetGain,
     buildSetMute,
+    buildSetOutputMute,
 } from '../lake/dlmCommands';
 import { GROUPS, ModuleId } from '../lake/lakeModel';
 
@@ -15,6 +18,7 @@ export interface LakeSettings {
     host: string;
     port: number;
     bindAddress?: string;
+    bindNetmask?: string;
     debug?: boolean;
 }
 
@@ -23,10 +27,12 @@ export class LakeBackend implements Backend {
 
     private static readonly KNOWN_UNIT_TTL_MS = 30000;
     private static readonly MAX_ROUTER_INDEX = 16;
+    private static readonly ALL_ROUTERS_TARGET_ID = 'ALL';
 
     private client: DlmClient;
     private settings: LakeSettings;
     private unitsByDeviceId = new Map<string, DlmDiscoveredUnit>();
+    private outputChannelCountsByDeviceId = new Map<string, Map<ModuleId, number>>();
     private routerIdsByDeviceId = new Map<string, number[]>();
     private routerProbeInFlight = new Map<string, Promise<number[]>>();
 
@@ -37,6 +43,7 @@ export class LakeBackend implements Backend {
             host: settings.host,
             port: settings.port,
             bindAddress: settings.bindAddress,
+            bindNetmask: settings.bindNetmask,
             debug: settings.debug,
         });
     }
@@ -45,19 +52,23 @@ export class LakeBackend implements Backend {
         const previousHost = this.settings.host;
         const previousPort = this.settings.port;
         const previousBindAddress = this.settings.bindAddress;
+        const previousBindNetmask = this.settings.bindNetmask;
         this.settings = { ...this.settings, ...settings };
         this.client.updateConfig({
             host: this.settings.host,
             port: this.settings.port,
             bindAddress: this.settings.bindAddress,
+            bindNetmask: this.settings.bindNetmask,
             debug: this.settings.debug,
         });
         if (
             previousHost !== this.settings.host ||
             previousPort !== this.settings.port ||
-            previousBindAddress !== this.settings.bindAddress
+            previousBindAddress !== this.settings.bindAddress ||
+            previousBindNetmask !== this.settings.bindNetmask
         ) {
             this.unitsByDeviceId.clear();
+            this.outputChannelCountsByDeviceId.clear();
             this.routerIdsByDeviceId.clear();
             this.routerProbeInFlight.clear();
         }
@@ -89,6 +100,7 @@ export class LakeBackend implements Backend {
 
         for (const deviceId of Array.from(this.routerIdsByDeviceId.keys())) {
             if (!nextDeviceIds.has(deviceId)) {
+                this.outputChannelCountsByDeviceId.delete(deviceId);
                 this.routerIdsByDeviceId.delete(deviceId);
             }
         }
@@ -113,12 +125,17 @@ export class LakeBackend implements Backend {
         }));
 
         Object.values(GROUPS).forEach((group) => {
+            const name = group.name === 'ALL'
+                ? 'All Modules'
+                : group.name === 'LR'
+                    ? 'Modules A+B'
+                    : `Group ${group.name}`;
             targets.push({
                 backend: 'lake',
                 deviceId: device.id,
                 kind: 'group',
                 id: group.name,
-                name: `Group ${group.name}`,
+                name,
                 supports: ['mute', 'level'],
             });
         });
@@ -136,6 +153,16 @@ export class LakeBackend implements Backend {
         const unit = this.unitsByDeviceId.get(device.id) || this.client.getKnownUnits().find((knownUnit) => `lake:${knownUnit.frameId}` === device.id);
         if (unit) {
             const routerIds = await this.getRouterIds(device.id, unit);
+            if (routerIds.length > 1) {
+                targets.push({
+                    backend: 'lake',
+                    deviceId: device.id,
+                    kind: 'router',
+                    id: LakeBackend.ALL_ROUTERS_TARGET_ID,
+                    name: 'All Routers',
+                    supports: ['priority'],
+                });
+            }
             routerIds.forEach((routerIndex) => {
                 targets.push({
                     backend: 'lake',
@@ -163,7 +190,7 @@ export class LakeBackend implements Backend {
         }
 
         if (target.kind === 'module') {
-            const mute = await this.readMute(unit, target.id as ModuleId);
+            const mute = await this.readOutputMute(unit, target.deviceId, target.id as ModuleId);
             const gain = await this.readGain(unit, target.id as ModuleId);
             return {
                 online: true,
@@ -175,7 +202,9 @@ export class LakeBackend implements Backend {
 
         if (target.kind === 'group') {
             const group = GROUPS[target.id];
-            const mutes = await Promise.all(group.muteMembers.map((member) => this.readMute(unit, member.module)));
+            const mutes = await Promise.all(
+                group.muteMembers.map((member) => this.readOutputMute(unit, target.deviceId, member.module))
+            );
             const gains = await Promise.all(group.gainMembers.map((member) => this.readGain(unit, member.module)));
             const muteState = mutes.every((mute) => mute === true);
             const validGains = gains.filter((gain): gain is number => gain != null);
@@ -192,10 +221,7 @@ export class LakeBackend implements Backend {
         }
 
         if (target.kind === 'router') {
-            const routerIndex = target.routerIndex ?? parseInt(target.id, 10);
-            const priorityMode = Number.isNaN(routerIndex)
-                ? null
-                : await this.readForceInputPriority(unit, routerIndex);
+            const priorityMode = await this.readTargetPriorityMode(unit, target);
             return {
                 online: true,
                 priorityMode: priorityMode ?? undefined,
@@ -220,13 +246,15 @@ export class LakeBackend implements Backend {
         }
 
         if (target.kind === 'module') {
-            await this.client.send(buildSetMute(target.id, mute), unit);
+            await this.setOutputMute(unit, target.deviceId, target.id as ModuleId, mute);
             return;
         }
 
         if (target.kind === 'group') {
             const group = GROUPS[target.id];
-            await Promise.all(group.muteMembers.map((member) => this.client.send(buildSetMute(member.module, mute), unit)));
+            await Promise.all(
+                group.muteMembers.map((member) => this.setOutputMute(unit, target.deviceId, member.module, mute))
+            );
         }
     }
 
@@ -261,12 +289,14 @@ export class LakeBackend implements Backend {
             throw new Error(`Lake unit not found for ${target.deviceId}`);
         }
 
-        const routerIndex = target.routerIndex ?? parseInt(target.id, 10);
-        if (Number.isNaN(routerIndex) || routerIndex < 1) {
+        const routerIds = await this.getTargetRouterIds(target, unit);
+        if (routerIds.length === 0) {
             throw new Error(`Invalid Lake router target ${target.id}`);
         }
 
-        await this.client.send(buildSetForceInputPriority(routerIndex, value), unit);
+        await Promise.all(
+            routerIds.map((routerIndex) => this.client.send(buildSetForceInputPriority(routerIndex, value), unit))
+        );
     }
 
     public async recallPreset(device: DeviceDescriptor, index: number): Promise<void> {
@@ -290,6 +320,31 @@ export class LakeBackend implements Backend {
         }
     }
 
+    private async readOutputMute(unit: DlmDiscoveredUnit, deviceId: string, module: ModuleId): Promise<boolean | null> {
+        const channels = await this.getOutputChannels(deviceId, unit, module);
+        if (channels.length === 0) {
+            return this.readMute(unit, module);
+        }
+
+        const mutes = await Promise.all(
+            channels.map(async (channel) => {
+                try {
+                    const response = await this.client.send(buildGetOutputMute(module, channel), unit, 1, 1000);
+                    return response ? parseMutePayload(response.payload) : null;
+                } catch {
+                    return null;
+                }
+            })
+        );
+
+        const validMutes = mutes.filter((value): value is boolean => value !== null);
+        if (validMutes.length === 0) {
+            return this.readMute(unit, module);
+        }
+
+        return validMutes.every((value) => value === true);
+    }
+
     private async readGain(unit: DlmDiscoveredUnit, module: ModuleId): Promise<number | null> {
         try {
             const response = await this.client.send(buildGetGain(module), unit, 1, 1000);
@@ -311,6 +366,41 @@ export class LakeBackend implements Backend {
             return parsePriorityPayload(response.payload);
         } catch {
             return null;
+        }
+    }
+
+    private async setOutputMute(unit: DlmDiscoveredUnit, deviceId: string, module: ModuleId, mute: boolean) {
+        const channels = await this.getOutputChannels(deviceId, unit, module);
+        if (channels.length === 0) {
+            await this.client.send(buildSetMute(module, mute), unit);
+            return;
+        }
+
+        await Promise.all(
+            channels.map((channel) => this.client.send(buildSetOutputMute(module, channel, mute), unit))
+        );
+    }
+
+    private async getOutputChannels(deviceId: string, unit: DlmDiscoveredUnit, module: ModuleId): Promise<number[]> {
+        const cachedDeviceChannels = this.outputChannelCountsByDeviceId.get(deviceId);
+        const cachedCount = cachedDeviceChannels?.get(module);
+        if (cachedCount !== undefined) {
+            return buildChannelIndexList(cachedCount);
+        }
+
+        try {
+            const response = await this.client.send(buildGetOutputChannels(module), unit, 1, 1000);
+            const count = parseChannelCountPayload(response?.payload || '');
+            if (count <= 0) {
+                return [];
+            }
+
+            const nextCache = cachedDeviceChannels || new Map<ModuleId, number>();
+            nextCache.set(module, count);
+            this.outputChannelCountsByDeviceId.set(deviceId, nextCache);
+            return buildChannelIndexList(count);
+        } catch {
+            return [];
         }
     }
 
@@ -366,6 +456,40 @@ export class LakeBackend implements Backend {
         } catch {
             return null;
         }
+    }
+
+    private async readTargetPriorityMode(unit: DlmDiscoveredUnit, target: TargetDescriptor): Promise<InputPriorityMode | null> {
+        const routerIds = await this.getTargetRouterIds(target, unit);
+        if (routerIds.length === 0) {
+            return null;
+        }
+
+        const modes = await Promise.all(
+            routerIds.map((routerIndex) => this.readForceInputPriority(unit, routerIndex))
+        );
+        const validModes = modes.filter((mode): mode is InputPriorityMode => mode !== null);
+        if (validModes.length !== routerIds.length) {
+            return null;
+        }
+
+        return validModes.every((mode) => mode === validModes[0]) ? validModes[0] : null;
+    }
+
+    private async getTargetRouterIds(target: TargetDescriptor, unit: DlmDiscoveredUnit): Promise<number[]> {
+        if (target.kind !== 'router') {
+            return [];
+        }
+
+        if (target.id === LakeBackend.ALL_ROUTERS_TARGET_ID) {
+            return this.getRouterIds(target.deviceId, unit);
+        }
+
+        const routerIndex = target.routerIndex ?? parseInt(target.id, 10);
+        if (Number.isNaN(routerIndex) || routerIndex < 1) {
+            return [];
+        }
+
+        return [routerIndex];
     }
 
     private getUnitForTarget(target: TargetDescriptor) {
@@ -425,4 +549,18 @@ function parsePriorityPayload(payload: string): InputPriorityMode | null {
     }
 
     return null;
+}
+
+function parseChannelCountPayload(payload: string): number {
+    const match = payload.match(/(\d+)(?!.*\d)/);
+    if (!match) {
+        return 0;
+    }
+
+    const count = parseInt(match[1], 10);
+    return Number.isNaN(count) ? 0 : count;
+}
+
+function buildChannelIndexList(count: number): number[] {
+    return Array.from({ length: count }, (_, index) => index + 1);
 }

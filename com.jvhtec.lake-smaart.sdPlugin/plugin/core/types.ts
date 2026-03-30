@@ -22,18 +22,19 @@ export type TargetDescriptor =
           supports?: TargetSupport[];
           routerIndex?: number;
       }
-    | {
-          backend: 'la_http';
-          deviceId: string;
-          kind: 'input' | 'output';
-          id: string;
-          index?: number;
-          name: string;
-          supports: Array<'mute' | 'level' | 'volume'>;
-          path: string;
-          profile: LaHttpDeviceProfile;
-          family?: string;
-      }
+      | {
+            backend: 'la_http';
+            deviceId: string;
+            kind: 'input' | 'output';
+            id: string;
+            index?: number;
+            name: string;
+            supports: Array<'mute' | 'level' | 'volume'>;
+            path: string;
+            profile: LaHttpDeviceProfile;
+            family?: string;
+            memberIds?: string[];
+        }
     | {
           backend: 'la_http';
           deviceId: string;

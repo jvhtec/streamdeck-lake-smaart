@@ -148,8 +148,51 @@ let websocket = null;
 let uuid = null;
 let actionInfo = null;
 let catalog = { devices: [], targets: [], laAdapters: [] };
+let catalogLoaded = false;
 let lastGlobalSettings = {};
+let lastSettings = {};
 let catalogRefreshTimer = null;
+const discoveryFields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
+
+function mergeDiscoveryFieldValues(base, source) {
+    const next = Object.assign({}, base || {});
+    if (!source) {
+        return next;
+    }
+    discoveryFields.forEach((field) => {
+        if (Object.prototype.hasOwnProperty.call(source, field)) {
+            next[field] = source[field];
+        }
+    });
+    return next;
+}
+
+function applyDiscoveryFieldValues(settings) {
+    lastGlobalSettings = mergeDiscoveryFieldValues(lastGlobalSettings, settings);
+    discoveryFields.forEach((field) => {
+        const el = document.getElementById(field);
+        if (!el || lastGlobalSettings[field] === undefined) {
+            return;
+        }
+        if (el.type === 'checkbox') {
+            el.checked = lastGlobalSettings[field] === true || lastGlobalSettings[field] === 'true' || lastGlobalSettings[field] === '1';
+        } else {
+            el.value = lastGlobalSettings[field];
+        }
+    });
+    updateLakeAdapterOptions(lastGlobalSettings.lakeBindAddress);
+    updateLaAdapterOptions(lastGlobalSettings.laBindAddress);
+}
+
+function getDiscoveryFieldValues() {
+    const values = mergeDiscoveryFieldValues({}, lastGlobalSettings);
+    discoveryFields.forEach((field) => {
+        const el = document.getElementById(field);
+        if (!el) return;
+        values[field] = el.type === 'checkbox' ? el.checked : (el.value || '');
+    });
+    return values;
+}
 
 function getActionId() {
     return actionInfo?.action || '';
@@ -241,6 +284,7 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
         if (jsonObj.event === 'sendToPropertyInspector') {
             if (jsonObj.payload && jsonObj.payload.devices) {
                 catalog = jsonObj.payload;
+                catalogLoaded = true;
                 updateLakeAdapterOptions(lastGlobalSettings.lakeBindAddress);
                 updateLaAdapterOptions(lastGlobalSettings.laBindAddress);
                 updateSelectors();
@@ -252,9 +296,10 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
 }
 
 function loadSettings(settings) {
+    lastSettings = Object.assign({}, settings);
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || discoveryFields.includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -263,25 +308,13 @@ function loadSettings(settings) {
             input.value = settings[input.id] ?? '';
         }
     });
+    applyDiscoveryFieldValues(settings);
     updateSelectors(settings.deviceId, settings.targetId);
     updateUI();
 }
 
 function loadGlobalSettings(settings) {
-    lastGlobalSettings = Object.assign({}, settings);
-    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
-    fields.forEach((field) => {
-        const el = document.getElementById(field);
-        if (el && settings[field] !== undefined) {
-            if (el.type === 'checkbox') {
-                el.checked = settings[field] === true || settings[field] === 'true' || settings[field] === '1';
-            } else {
-                el.value = settings[field];
-            }
-        }
-    });
-    updateLakeAdapterOptions(settings.lakeBindAddress);
-    updateLaAdapterOptions(settings.laBindAddress);
+    applyDiscoveryFieldValues(settings);
     scheduleCatalogRefresh();
     updateUI();
 }
@@ -291,7 +324,7 @@ function saveSettings() {
     const settings = {};
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(input => {
-        if (!input.id || ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'].includes(input.id)) {
+        if (!input.id || discoveryFields.includes(input.id)) {
             return;
         }
         if (input.type === 'checkbox') {
@@ -300,32 +333,34 @@ function saveSettings() {
             settings[input.id] = input.value;
         }
     });
+    const mergedSettings = Object.assign({}, settings, getDiscoveryFieldValues());
 
     websocket.send(JSON.stringify({
         event: 'setSettings',
         context: actionInfo.context,
-        payload: settings
+        payload: mergedSettings
     }));
 
+    lastSettings = Object.assign({}, mergedSettings);
     updateSelectors(settings.deviceId, settings.targetId);
 }
 
 function saveGlobalSettings() {
     if (!websocket) return;
-    const payload = Object.assign({}, lastGlobalSettings);
-    const fields = ['lakeHost', 'lakePort', 'lakeBindAddress', 'lakeDebug', 'laBindAddress', 'laDiscoverySubnet', 'laDiscoveryHosts', 'laAuthUser', 'laAuthPass', 'laDebugLogging', 'smaartHost', 'smaartPort'];
-    fields.forEach((field) => {
-        const el = document.getElementById(field);
-        if (el) {
-            payload[field] = el.type === 'checkbox' ? el.checked : (el.value || '');
-        }
-    });
+    const payload = getDiscoveryFieldValues();
+    lastGlobalSettings = Object.assign({}, payload);
 
     websocket.send(JSON.stringify({
         event: 'setGlobalSettings',
         context: uuid,
         payload
     }));
+    websocket.send(JSON.stringify({
+        event: 'setSettings',
+        context: actionInfo.context,
+        payload: Object.assign({}, lastSettings, payload)
+    }));
+    lastSettings = Object.assign({}, lastSettings, payload);
 
     scheduleCatalogRefresh();
 }
@@ -350,7 +385,7 @@ function updateLaAdapterOptions(selectedAddress) {
         select.appendChild(option);
     });
 
-    if (currentValue && !adapters.some((adapter) => adapter.address === currentValue)) {
+    if (catalogLoaded && currentValue && !adapters.some((adapter) => adapter.address === currentValue)) {
         const missingOption = document.createElement('option');
         missingOption.value = currentValue;
         missingOption.textContent = `${currentValue} (Unavailable)`;
@@ -380,7 +415,7 @@ function updateLakeAdapterOptions(selectedAddress) {
         select.appendChild(option);
     });
 
-    if (currentValue && !adapters.some((adapter) => adapter.address === currentValue)) {
+    if (catalogLoaded && currentValue && !adapters.some((adapter) => adapter.address === currentValue)) {
         const missingOption = document.createElement('option');
         missingOption.value = currentValue;
         missingOption.textContent = `${currentValue} (Unavailable)`;
@@ -472,7 +507,10 @@ function requestCatalog() {
     websocket.send(JSON.stringify({
         event: 'sendToPlugin',
         context: actionInfo.context,
-        payload: { request: 'catalog' }
+        payload: {
+            request: 'catalog',
+            discoverySettings: getDiscoveryFieldValues()
+        }
     }));
 }
 
@@ -504,6 +542,15 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     if (!deviceSelect || !targetSelect) return;
     if (isSmaartAction()) return;
 
+    const currentDeviceId = deviceSelect.value || '';
+    const currentTargetId = targetSelect.value || '';
+    const preferredDeviceId = selectedDeviceId !== undefined
+        ? selectedDeviceId
+        : (lastSettings.deviceId || currentDeviceId);
+    const preferredTargetId = selectedTargetId !== undefined
+        ? selectedTargetId
+        : (lastSettings.targetId || currentTargetId);
+
     const devices = (catalog.devices || []).filter((device) => deviceSupportsRequiredAction(device));
     const targets = catalog.targets || [];
 
@@ -524,9 +571,9 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
 
     if (noDevices) noDevices.style.display = 'none';
 
-    const activeDevice = devices.some((device) => device.id === selectedDeviceId)
-        ? selectedDeviceId
-        : (deviceSelect.value || devices[0].id);
+    const activeDevice = devices.some((device) => device.id === preferredDeviceId)
+        ? preferredDeviceId
+        : devices[0].id;
     deviceSelect.value = activeDevice;
 
     const filteredTargets = targets.filter((target) => target.deviceId === activeDevice && isTargetSelectableForCurrentAction(target));
@@ -542,8 +589,8 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
         targetSelect.appendChild(option);
     });
 
-    if (selectedTargetId && filteredTargets.some((target) => buildCatalogTargetId(target) === selectedTargetId)) {
-        targetSelect.value = selectedTargetId;
+    if (preferredTargetId && filteredTargets.some((target) => buildCatalogTargetId(target) === preferredTargetId)) {
+        targetSelect.value = preferredTargetId;
     } else if (targetSelect.options.length > 0) {
         targetSelect.value = targetSelect.options[0].value;
     }

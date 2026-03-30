@@ -30,6 +30,7 @@ npm run test:la
 
 The smoke runner accepts `host:port`, optional `--user` / `--pass`, `--verbose`, and `--write-checks`. Read-only mode is the default so accidental audio changes are avoided unless you opt in.
 Add `--bind <local-ip>` when you need to force a specific NIC during hardware tests on a multi-homed machine.
+It also accepts `--subnet <cidr>` for hardware-first scans, plus `--scan-only` when you want to list reachable devices before choosing one for deeper checks.
 
 If you want only the smoke runner's verbose output without npm's own verbose logging, run `node scripts/la-smoke.js --host <host> --verbose` after `npm run build`.
 
@@ -62,6 +63,12 @@ Use `--profile p1`, `--profile lc16d`, or `--profile amplified` when you want th
 
 ```powershell
 npm run la:smoke -- --host <device-ip> --user <user> --pass <pass> --verbose
+```
+
+Or scan the entire NIC first and then re-run against the discovered device:
+
+```powershell
+node scripts/la-smoke.js --subnet 192.168.1.0/24 --bind 192.168.1.254 --scan-only --verbose
 ```
 
 6. Confirm:

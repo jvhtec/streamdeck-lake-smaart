@@ -5,22 +5,34 @@ const { LaHttpBackend } = require(backendModulePath);
 
 async function main() {
     const args = process.argv.slice(2);
-    const host = readOption(args, 'host') || firstPositionalArg(args) || process.env.npm_config_host;
-    if (!host) {
+    const positionals = positionalArgs(args);
+    const configuredHost = normalizeCliValue(readOption(args, 'host') || process.env.npm_config_host);
+    const configuredSubnet = normalizeCliValue(readOption(args, 'subnet') || process.env.npm_config_subnet);
+    const firstPositional = positionals[0];
+    const positionalSubnet = !configuredHost && !configuredSubnet && looksLikeSubnet(firstPositional) ? firstPositional : undefined;
+    const host = configuredHost || (!configuredSubnet && !positionalSubnet ? firstPositional : undefined);
+    const subnet =
+        configuredSubnet ||
+        positionalSubnet ||
+        (host ? undefined : deriveDefaultSubnet(positionals[1] || normalizeCliValue(readOption(args, 'bind') || process.env.npm_config_bind)));
+    if (!host && !subnet) {
         printUsage();
         process.exit(1);
     }
 
     const verbose = readFlag(args, 'verbose') || process.env.npm_config_loglevel === 'verbose';
     const writeChecks = readFlag(args, 'write-checks') || isTrueEnv(process.env.npm_config_write_checks);
-    const username = readOption(args, 'user') || process.env.npm_config_user;
-    const password = readOption(args, 'pass') || process.env.npm_config_pass;
-    const bindAddress = readOption(args, 'bind') || process.env.npm_config_bind;
+    const scanOnly = readFlag(args, 'scan-only') || isTrueEnv(process.env.npm_config_scan_only);
+    const username = normalizeCliValue(readOption(args, 'user') || process.env.npm_config_user) || positionals[2];
+    const password = normalizeCliValue(readOption(args, 'pass') || process.env.npm_config_pass) || positionals[3];
+    const bindAddress =
+        normalizeCliValue(readOption(args, 'bind') || process.env.npm_config_bind) ||
+        (host ? positionals[1] : positionals[0]);
 
     const backend = new LaHttpBackend(
         {
-            discoverySubnet: '192.168.1.0/24',
-            discoveryHosts: [host],
+            discoverySubnet: subnet || '192.168.1.0/24',
+            discoveryHosts: host ? [host] : [],
             bindAddress: bindAddress || undefined,
             username: username || undefined,
             password: password || undefined,
@@ -29,13 +41,32 @@ async function main() {
         (message) => console.log(message)
     );
 
-    console.log(`[la-smoke] Discovering ${host}${bindAddress ? ` via ${bindAddress}` : ''}...`);
+    console.log(
+        host
+            ? `[la-smoke] Discovering ${host}${bindAddress ? ` via ${bindAddress}` : ''}...`
+            : `[la-smoke] Discovering L-Acoustics devices on ${subnet}${bindAddress ? ` via ${bindAddress}` : ''}...`
+    );
     const devices = await backend.discover();
     if (devices.length === 0) {
-        throw new Error(`No L-Acoustics device responded at ${host}.`);
+        throw new Error(host ? `No L-Acoustics device responded at ${host}.` : `No L-Acoustics devices responded on ${subnet}.`);
     }
 
-    const device = devices[0];
+    console.log(`[la-smoke] Discovered ${devices.length} device(s).`);
+    devices.forEach((device) => {
+        console.log(`[la-smoke] - ${device.address || device.id}: ${device.name}${device.model ? ` (${device.model})` : ''}`);
+    });
+
+    if (scanOnly) {
+        console.log('[la-smoke] Scan-only mode completed.');
+        return;
+    }
+
+    for (const device of devices) {
+        await runSmokeForDevice(backend, device, writeChecks);
+    }
+}
+
+async function runSmokeForDevice(backend, device, writeChecks) {
     console.log(`[la-smoke] Device: ${device.name}${device.model ? ` (${device.model})` : ''}`);
 
     const targets = await backend.getTargets(device);
@@ -145,12 +176,48 @@ function firstPositionalArg(args) {
     return args.find((value) => !value.startsWith('--'));
 }
 
+function positionalArgs(args) {
+    return args.filter((value) => !value.startsWith('--'));
+}
+
+function normalizeCliValue(value) {
+    if (value === undefined || value === null) {
+        return undefined;
+    }
+
+    const normalized = String(value).trim();
+    if (!normalized || normalized === 'true') {
+        return undefined;
+    }
+
+    return normalized;
+}
+
+function deriveDefaultSubnet(bindAddress) {
+    if (!bindAddress) {
+        return undefined;
+    }
+
+    const match = String(bindAddress).trim().match(/^(\d+\.\d+\.\d+)\.\d+$/);
+    if (!match) {
+        return undefined;
+    }
+
+    return `${match[1]}.0/24`;
+}
+
+function looksLikeSubnet(value) {
+    return typeof value === 'string' && /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(value.trim());
+}
+
 function isTrueEnv(value) {
     return value === 'true' || value === '1';
 }
 
 function printUsage() {
-    console.log('Usage: node scripts/la-smoke.js --host <ip-or-host> [--bind <local-ip>] [--user admin --pass admin] [--verbose] [--write-checks]');
+    console.log(
+        'Usage: node scripts/la-smoke.js [--host <ip-or-host> | --subnet <cidr>] [--bind <local-ip>] [--user admin --pass admin] [--verbose] [--write-checks] [--scan-only]'
+    );
 }
 
 main().catch((error) => {

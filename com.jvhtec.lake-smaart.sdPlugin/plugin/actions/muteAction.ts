@@ -23,10 +23,14 @@ export class MuteAction implements Action {
         this.deviceManager = deviceManager;
         this.allowedBackend = options.allowedBackend;
         this.logPrefix = options.logPrefix || 'Mute';
+        this.deviceManager.on('catalogUpdated', () => {
+            this.refreshAvailability();
+        });
         this.deviceManager.on('targetStateUpdated', (target, state) => {
             const targetId = this.deviceManager.getTargetId(target);
             for (const [context, mappedTargetId] of this.contextTargets.entries()) {
                 if (mappedTargetId === targetId && state.mute !== undefined) {
+                    this.sdClient.setTitle(context, '');
                     this.sdClient.setState(context, state.mute ? 1 : 0);
                 }
             }
@@ -38,9 +42,7 @@ export class MuteAction implements Action {
         if (targetId) {
             this.deviceManager.registerBinding(event.context, targetId, 'mute');
             this.contextTargets.set(event.context, targetId);
-            if (!this.deviceManager.getTarget(targetId)) {
-                this.sdClient.setTitle(event.context, 'OFFLINE');
-            }
+            this.syncAvailability(event.context, targetId);
         }
     }
 
@@ -55,9 +57,7 @@ export class MuteAction implements Action {
         if (targetId) {
             this.deviceManager.registerBinding(event.context, targetId, 'mute');
             this.contextTargets.set(event.context, targetId);
-            if (!this.deviceManager.getTarget(targetId)) {
-                this.sdClient.setTitle(event.context, 'OFFLINE');
-            }
+            this.syncAvailability(event.context, targetId);
         }
     }
 
@@ -72,6 +72,7 @@ export class MuteAction implements Action {
         if (momentary) {
             try {
                 await this.deviceManager.setMute(targetId, true);
+                this.sdClient.setTitle(e.context, '');
                 this.sdClient.setState(e.context, 1);
             } catch (error) {
                 this.sdClient.showAlert(e.context);
@@ -84,6 +85,7 @@ export class MuteAction implements Action {
         try {
             await this.deviceManager.setMute(targetId, Boolean(next));
             this.lastMuteState.set(targetId, Boolean(next));
+            this.sdClient.setTitle(e.context, '');
             this.sdClient.setState(e.context, next ? 1 : 0);
         } catch (error) {
             this.sdClient.showAlert(e.context);
@@ -101,11 +103,27 @@ export class MuteAction implements Action {
         }
         try {
             await this.deviceManager.setMute(targetId, false);
+            this.sdClient.setTitle(e.context, '');
             this.sdClient.setState(e.context, 0);
         } catch (error) {
             this.sdClient.showAlert(e.context);
             this.sdClient.logMessage(`[${this.logPrefix}] Failed for ${targetId}: ${formatError(error)}`);
         }
+    }
+
+    private refreshAvailability() {
+        for (const [context, targetId] of this.contextTargets.entries()) {
+            this.syncAvailability(context, targetId);
+        }
+    }
+
+    private syncAvailability(context: string, targetId: string) {
+        if (this.deviceManager.getTarget(targetId)) {
+            this.sdClient.setTitle(context, '');
+            return;
+        }
+
+        this.sdClient.setTitle(context, 'OFFLINE');
     }
 
     private isAllowedTarget(targetId: string, context: string): boolean {

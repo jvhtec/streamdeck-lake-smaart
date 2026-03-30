@@ -22,14 +22,24 @@ export class PriorityAction implements Action {
     constructor(sdClient: SDClient, deviceManager: DeviceManager) {
         this.sdClient = sdClient;
         this.deviceManager = deviceManager;
+        this.deviceManager.on('catalogUpdated', () => {
+            this.refreshAvailability();
+        });
         this.deviceManager.on('targetStateUpdated', (target, state) => {
             const targetId = this.deviceManager.getTargetId(target);
             for (const [context, mappedTargetId] of this.contextTargets.entries()) {
-                if (mappedTargetId !== targetId || state.priorityMode === undefined) {
+                if (mappedTargetId !== targetId) {
                     continue;
                 }
                 const expectedMode = this.getExpectedModeForContext(context);
-                this.sdClient.setState(context, expectedMode === state.priorityMode ? 1 : 0);
+                if (!state.online) {
+                    this.sdClient.setTitle(context, 'OFFLINE');
+                    this.sdClient.setState(context, 0);
+                    continue;
+                }
+
+                this.sdClient.setTitle(context, '');
+                this.sdClient.setState(context, expectedMode !== undefined && expectedMode === state.priorityMode ? 1 : 0);
             }
         });
     }
@@ -100,14 +110,14 @@ export class PriorityAction implements Action {
         this.contextTargets.set(context, targetId);
         if (!this.deviceManager.getTarget(targetId)) {
             this.sdClient.setTitle(context, 'OFFLINE');
+            this.sdClient.setState(context, 0);
             return;
         }
 
+        this.sdClient.setTitle(context, '');
         const state = this.deviceManager.getTargetState(targetId);
         const expectedMode = this.getExpectedModeForContext(context);
-        if (state?.priorityMode !== undefined) {
-            this.sdClient.setState(context, expectedMode === state.priorityMode ? 1 : 0);
-        }
+        this.sdClient.setState(context, state?.priorityMode !== undefined && expectedMode === state.priorityMode ? 1 : 0);
     }
 
     private async executePriorityChange(context: string, targetId: string, priorityMode: InputPriorityMode) {
@@ -132,6 +142,18 @@ export class PriorityAction implements Action {
             return this.contextLastRequestedModes.get(context);
         }
         return this.contextModes.get(context);
+    }
+
+    private refreshAvailability() {
+        for (const [context, targetId] of this.contextTargets.entries()) {
+            if (!this.deviceManager.getTarget(targetId)) {
+                this.sdClient.setTitle(context, 'OFFLINE');
+                this.sdClient.setState(context, 0);
+                continue;
+            }
+
+            this.sdClient.setTitle(context, '');
+        }
     }
 
     private clearPendingContextTimer(context: string) {

@@ -1,0 +1,45 @@
+[0328/132727.826:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0328/134935.133:ERROR:tcp_socket_win.cc(346)] bind() returned an error: Only one usage of each socket address (protocol/network address/port) is normally permitted. (0x2740)
+[0328/134935.134:ERROR:devtools_http_handler.cc(309)] Cannot start http server for devtools.
+[0328/135135.382:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0328/152111.611:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0328/154811.420:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0328/163430.902:ERROR:tcp_socket_win.cc(346)] bind() returned an error: Only one usage of each socket address (protocol/network address/port) is normally permitted. (0x2740)
+[0328/163430.936:ERROR:devtools_http_handler.cc(309)] Cannot start http server for devtools.
+[0328/163631.184:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/093108.408:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093108.429:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093108.438:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093108.450:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093108.457:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093108.463:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093110.521:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093110.533:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093114.604:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093114.634:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093114.635:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093116.617:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093116.623:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093121.629:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093121.629:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093206.132:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093206.438:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093333.503:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093334.663:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093335.235:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093335.254:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093335.264:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093335.272:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/093335.284:WARNING:dns_config_service_win.cc(583)] Failed to read DnsConfig.
+[0330/102329.821:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/103144.721:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/103825.582:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/104250.133:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/105742.982:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/110335.159:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/110922.236:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/111322.154:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/115003.606:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/115608.914:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/120117.488:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 
+[0330/121049.707:ERROR:gpu_init.cc(523)] Passthrough is not supported, GL is disabled, ANGLE is 

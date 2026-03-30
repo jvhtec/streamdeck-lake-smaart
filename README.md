@@ -30,9 +30,9 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 ## Features
 
 - Control Lake LM module/group gain and mute with Stream Deck+ encoders.
-- Toggle mute on Lake LM modules/groups and documented L-Acoustics targets, including P1 input settings and amplified-controller outputs.
+- Toggle mute on Lake LM module outputs and groups such as `All Modules`, plus documented L-Acoustics targets including individual P1 inputs, grouped P1 input banks such as `Analog Inputs 1-4` / `AVB Inputs 5-8`, and amplified-controller outputs.
 - Use dedicated `Lake` and `L-Acoustics` mute, level, and preset actions so each inspector only shows the relevant devices, targets, and backend discovery settings.
-- Force Lake input routers to `Auto`, `Priority 1`, `Priority 2`, `Priority 3`, or `Priority 4` from keys, including an optional push-count mode where one press selects `Priority 1`, two quick presses selects `Priority 2`, and so on.
+- Force Lake input routers to `Auto`, `Priority 1`, `Priority 2`, `Priority 3`, or `Priority 4` from keys, including an optional push-count mode where one press selects `Priority 1`, two quick presses selects `Priority 2`, and so on. Router targets now include `All Routers` for frame-wide priority changes.
 - Recall Lake presets and L-Acoustics configurations from platform-specific key actions.
 - Filter action device dropdowns to only the devices that have valid targets for that action on the selected NIC.
 - Adjust Smaart generator gain from a dial and press the dial to toggle the generator on or off.
@@ -107,3 +107,4 @@ For local Lake debugging without hardware, run `npm run lake:mock` and point the
 - Run the automated LA regression suite: `npm run test:la`
 
 Add `--profile lc16d` or `--profile amplified` to the mock when you want to emulate those families. Add `--bind <local-ip>` to the smoke runner when you need to force a specific NIC on a multi-homed machine. Add `--write-checks` to `npm run la:smoke -- --host <host>` when you explicitly want mute, gain, and preset recall writes exercised. For Monday hardware sessions, enable **LA Debug Log** in the property inspector first so Stream Deck logs include per-request path/status traces.
+For hardware-first discovery on a new NIC, you can also run `node scripts/la-smoke.js --subnet 192.168.1.0/24 --bind 192.168.1.254 --scan-only --verbose` to list reachable devices before targeting one host.

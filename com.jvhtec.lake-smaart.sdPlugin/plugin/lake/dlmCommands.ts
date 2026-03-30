@@ -12,6 +12,18 @@ export function buildSetMute(module: string, mute: boolean): string {
     return `Mod.In.Mute=${module} ${mute ? 1 : 0}`;
 }
 
+export function buildGetOutputChannels(module: string): string {
+    return `Mod.Out.Chans?${module}`;
+}
+
+export function buildGetOutputMute(module: string, channel: number): string {
+    return `Mod.Out.Mute?${module} ${channel}`;
+}
+
+export function buildSetOutputMute(module: string, channel: number, mute: boolean): string {
+    return `Mod.Out.Mute=${module} ${channel} ${mute ? 1 : 0}`;
+}
+
 export function buildGetGain(module: string): string {
     return `Mod.In.Gain?${module}`;
 }

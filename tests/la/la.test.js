@@ -83,24 +83,65 @@ test('LaHttpBackend discovers P1 input families and dedupes snapshot reads', asy
 
     const targets = await backend.getTargets(device);
     const inputTargets = targets.filter((target) => target.kind === 'input');
+    const groupedMuteTargets = inputTargets.filter((target) => Array.isArray(target.memberIds) && target.memberIds.length > 0);
+    const individualInputTargets = inputTargets.filter((target) => !Array.isArray(target.memberIds) || target.memberIds.length === 0);
     const presetTargets = targets.filter((target) => target.kind === 'preset');
 
-    assert.equal(inputTargets.length, 19);
-    assert.ok(inputTargets.some((target) => target.id === 'ana:1'));
-    assert.ok(inputTargets.some((target) => target.id === 'mic:2'));
-    assert.ok(inputTargets.some((target) => target.id === 'mpl'));
+    assert.equal(individualInputTargets.length, 19);
+    assert.equal(groupedMuteTargets.length, 4);
+    assert.ok(individualInputTargets.some((target) => target.id === 'ana:1'));
+    assert.ok(individualInputTargets.some((target) => target.id === 'mic:2'));
+    assert.ok(individualInputTargets.some((target) => target.id === 'mpl'));
+    assert.deepEqual(
+        groupedMuteTargets.map((target) => target.id).sort(),
+        ['group:aes:1-4', 'group:ana:1-4', 'group:avb:1-4', 'group:avb:5-8']
+    );
+    assert.ok(groupedMuteTargets.every((target) => target.supports.length === 1 && target.supports[0] === 'mute'));
     assert.equal(presetTargets.length, 3);
 
     const before = countRequests(server.requests, 'GET', '/api/input/settings');
     const [stateA, stateB] = await Promise.all([
-        backend.getState(inputTargets.find((target) => target.id === 'ana:1')),
-        backend.getState(inputTargets.find((target) => target.id === 'mpl')),
+        backend.getState(individualInputTargets.find((target) => target.id === 'ana:1')),
+        backend.getState(individualInputTargets.find((target) => target.id === 'mpl')),
     ]);
     const after = countRequests(server.requests, 'GET', '/api/input/settings');
 
     assert.equal(after - before, 1);
     assert.equal(typeof stateA.mute, 'boolean');
     assert.equal(typeof stateB.levelDb, 'number');
+});
+
+test('LaHttpBackend fans grouped P1 mute targets out to their member inputs', async (t) => {
+    const server = createMockLaServer({ profile: 'p1' });
+    const address = await server.start();
+    t.after(async () => server.stop());
+
+    const backend = new LaHttpBackend({
+        discoverySubnet: '192.168.1.0/24',
+        discoveryHosts: [`${address.host}:${address.port}`],
+    });
+
+    const [device] = await backend.discover();
+    const targets = await backend.getTargets(device);
+    const analogGroup = targets.find((target) => target.kind === 'input' && target.id === 'group:ana:1-4');
+
+    assert.ok(analogGroup);
+    assert.deepEqual(analogGroup.memberIds, ['ana:1', 'ana:2', 'ana:3', 'ana:4']);
+
+    const initialState = await backend.getState(analogGroup);
+    assert.equal(initialState.mute, false);
+
+    await backend.setMute(analogGroup, true);
+    const mutedState = await backend.getState(analogGroup);
+    assert.equal(mutedState.mute, true);
+    assert.equal(countRequestsMatching(server.requests, 'POST', /^\/api\/input\/settings\/ana\/[1-4]\/mute$/), 4);
+    assert.equal(server.state.inputSettings.ana.every((input) => input.mute === true), true);
+
+    await backend.setMute(analogGroup, false);
+    const restoredState = await backend.getState(analogGroup);
+    assert.equal(restoredState.mute, false);
+    assert.equal(countRequestsMatching(server.requests, 'POST', /^\/api\/input\/settings\/ana\/[1-4]\/mute$/), 8);
+    assert.equal(server.state.inputSettings.ana.every((input) => input.mute === false), true);
 });
 
 test('LaHttpBackend uses one configuration library read for P1 target discovery', async (t) => {
