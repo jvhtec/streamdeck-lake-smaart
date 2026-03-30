@@ -76,7 +76,7 @@ Lake DLM port notes:
 ## Property inspector compatibility
 
 - Action inspector pages (`ui/key.html` and `ui/dial.html`) are intentionally self-contained (inline script and styles) to avoid load failures on systems where the Stream Deck plugin install path includes special characters such as `#` (for example, user profiles like `FoH #1`).
-- **Fallback web inspector**: When the plugin detects `#` or `?` in its installation path (which breaks `file://` URL loading in Stream Deck's embedded browser), it automatically starts a local HTTP server and opens a web-based Property Inspector in the user's default browser. This fallback provides the same configuration UI and communicates with Stream Deck through the plugin backend's WebSocket relay.
+- **Fallback web inspector**: When the plugin detects `#` or `?` in its installation path (which breaks `file://` URL loading in Stream Deck's embedded browser), it automatically starts a local HTTP server and opens a browser-based inspector hub in the user's default browser. That hub lists the currently visible plugin actions and opens the same key/dial inspector UI safely over `http://127.0.0.1`.
 - Lake-specific mute/level/preset actions hide the L-Acoustics discovery fields, and L-Acoustics-specific actions hide the Lake discovery fields.
 
 ## Documentation

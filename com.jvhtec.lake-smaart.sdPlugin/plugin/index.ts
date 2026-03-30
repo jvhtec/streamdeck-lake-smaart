@@ -97,6 +97,12 @@ const smaartClient = new SmaartClient(defaultSettings.smaartHost, defaultSetting
 
 const deviceManager = new DeviceManager([lakeBackend, laHttpBackend]);
 const openInspectorContexts = new Set<string>();
+const visibleActionContexts = new Map<string, {
+    action: string;
+    context: string;
+    controller?: string;
+    coordinates?: { column: number; row: number };
+}>();
 deviceManager.on('log', (message: string) => {
     logPluginMessage(`[DeviceManager] ${message}`);
 });
@@ -346,6 +352,7 @@ let piServerPort = 0;
 let piServerHost = '127.0.0.1';
 let piServerToken = '';
 let piServerReady: Promise<void> | null = null;
+let fallbackHubOpened = false;
 
 if (hasUnsafePathChars) {
     piServer = new PiServer({
@@ -367,13 +374,14 @@ if (hasUnsafePathChars) {
             const { inputs, metrics } = mapSmaartSplCatalog(result.response);
             respond(inputs, metrics, result.ok ? undefined : result.error);
         },
+        onGetVisibleActions: () => Array.from(visibleActionContexts.values()),
     });
     piServerReady = piServer.start().then((assignedPort) => {
         piServerPort = assignedPort;
         piServerHost = piServer!.getBoundAddress();
         piServerToken = piServer!.getSessionToken();
         console.log(`[PI Fallback] Plugin path contains special characters.`);
-        console.log(`[PI Fallback] Web-based inspector available at http://${piServerHost}:${piServerPort}/`);
+        console.log(`[PI Fallback] Browser inspector hub: ${piServer!.getHubUrl()}`);
     }).catch((err) => {
         console.error('[PI Fallback] Failed to start fallback server:', err);
     });
@@ -387,6 +395,24 @@ sdClient.onEvents((event) => {
     if (piServer && event.event === 'didReceiveGlobalSettings') {
         piServer.sendGlobalSettings(event.payload.settings);
     }
+    if (event.event === 'willAppear') {
+        visibleActionContexts.set(event.context, {
+            action: event.action,
+            context: event.context,
+            controller: event.payload?.controller,
+            coordinates: event.payload?.coordinates,
+        });
+        if (hasUnsafePathChars && piServerReady && piServer && !fallbackHubOpened) {
+            piServerReady.then(() => {
+                if (fallbackHubOpened || !piServer) {
+                    return;
+                }
+                fallbackHubOpened = true;
+                sdClient.openUrl(piServer.getHubUrl());
+            });
+        }
+    }
+
     // Auto-open browser PI when the embedded PI can't load
     if (piServerReady && event.event === 'propertyInspectorDidAppear') {
         openInspectorContexts.add(event.context);
@@ -409,6 +435,7 @@ sdClient.onEvents((event) => {
     }
     if (event.event === 'willDisappear') {
         openInspectorContexts.delete(event.context);
+        visibleActionContexts.delete(event.context);
     }
 
     if (event.event === 'didReceiveGlobalSettings') {

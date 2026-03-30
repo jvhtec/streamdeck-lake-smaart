@@ -36,6 +36,8 @@ Open the property inspector for any action and set:
 Use the **Refresh Devices** button after changing discovery settings.
 The inspector also auto-refreshes after adapter and other global discovery changes, but the manual refresh button remains useful during active troubleshooting.
 
+If the host application shows an error such as `Failed to load URL: file:///C:/Users/FoH%20#1/...`, the plugin will open a browser-based inspector hub automatically. Use that localhost page to pick the visible action you want to configure and then continue in the browser inspector instead of the broken embedded panel.
+
 ## Actions
 
 ### Lake Level + Press-to-Mute (Encoder)

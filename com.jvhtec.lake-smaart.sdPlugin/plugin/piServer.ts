@@ -18,6 +18,12 @@ export interface PiServerCallbacks {
     onSetGlobalSettings: (settings: any) => void;
     onGetCatalog: (respond: (devices: any[], targets: any[], laAdapters: any[]) => void) => void;
     onGetSmaartSplCatalog: (respond: (inputs: any[], metrics: string[], error?: string) => void) => void;
+    onGetVisibleActions: () => Array<{
+        action: string;
+        context: string;
+        controller?: string;
+        coordinates?: { column: number; row: number };
+    }>;
 }
 
 export class PiServer {
@@ -70,6 +76,10 @@ export class PiServer {
         return this.sessionToken;
     }
 
+    public getHubUrl(): string {
+        return `http://${this.boundAddress}:${this.assignedPort}/?token=${encodeURIComponent(this.sessionToken)}`;
+    }
+
     /** Forward settings received from Stream Deck to any matching browser PI. */
     public sendSettings(context: string, settings: any) {
         for (const client of this.clients) {
@@ -116,12 +126,23 @@ export class PiServer {
             return;
         }
 
+        if (path === '/instances') {
+            const instances = this.callbacks.onGetVisibleActions();
+            res.writeHead(200, {
+                'Content-Type': 'application/json; charset=utf-8',
+                'Cache-Control': 'no-cache',
+            });
+            res.end(JSON.stringify({ instances }));
+            return;
+        }
+
         let html: string;
         if (path === '/dial') {
             html = DIAL_HTML;
-        } else {
-            // Default to key.html (covers /key, /, and any other path)
+        } else if (path === '/key') {
             html = KEY_HTML;
+        } else {
+            html = buildHubHtml(this.sessionToken);
         }
 
         res.writeHead(200, {
@@ -210,4 +231,127 @@ export class PiServer {
                 break;
         }
     }
+}
+
+function buildHubHtml(token: string): string {
+    const escapedToken = JSON.stringify(token);
+    return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Plugin Inspector Hub</title>
+    <style>
+        body{font-family:Arial,sans-serif;color:#ddd;background:#1f1f1f;margin:0;padding:16px}
+        .wrap{max-width:840px;margin:0 auto}
+        h1{font-size:20px;margin:0 0 8px}
+        p{color:#bcbcbc;line-height:1.4}
+        .note{background:#2b2b2b;border:1px solid #444;border-radius:8px;padding:12px;margin:12px 0 18px}
+        .list{display:flex;flex-direction:column;gap:10px}
+        .item{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:12px}
+        .meta{display:flex;flex-direction:column;gap:4px}
+        .name{font-weight:700;color:#fff}
+        .sub{font-size:12px;color:#aaa}
+        .link{display:inline-block;background:#4b7bec;color:#fff;text-decoration:none;padding:8px 12px;border-radius:6px;font-size:13px}
+        .empty{background:#2a2a2a;border:1px dashed #555;border-radius:8px;padding:16px;color:#aaa}
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>Browser Inspector Hub</h1>
+        <p>The plugin detected a Windows path with characters that break the built-in inspector URL. Use this page to open the safe browser-based inspector for any visible action.</p>
+        <div class="note">
+            Keep Stream Controller running while this page is open. The list below refreshes automatically.
+        </div>
+        <div id="list" class="list"></div>
+    </div>
+    <script>
+        const token = ${escapedToken};
+
+        function actionLabel(uuid) {
+            const name = (uuid || '').split('.').pop() || uuid || 'action';
+            switch (name) {
+                case 'lakeLevel': return 'Lake Level + Press-to-Mute';
+                case 'laLevel': return 'L-Acoustics Level + Press-to-Mute';
+                case 'lakePresetRecall': return 'Lake Preset Recall';
+                case 'laPresetRecall': return 'L-Acoustics Preset Recall';
+                case 'lakeMute': return 'Lake Mute';
+                case 'laMute': return 'L-Acoustics Mute';
+                case 'priority': return 'Lake Input Priority';
+                case 'smaartgengain': return 'Smaart Generator Gain';
+                case 'smaartfiletransport': return 'Smaart File Transport';
+                case 'smaartgen': return 'Smaart Generator';
+                case 'smaartspl': return 'Smaart SPL Meter';
+                case 'smaartcapture': return 'Smaart Capture';
+                case 'smaartdelay': return 'Smaart Compute Delay';
+                case 'smaarttrace': return 'Smaart Toggle Trace';
+                default: return name;
+            }
+        }
+
+        function isDialAction(action) {
+            return action === 'com.jvhtec.lake-smaart.lakeLevel' ||
+                action === 'com.jvhtec.lake-smaart.laLevel' ||
+                action === 'com.jvhtec.lake-smaart.smaartgengain' ||
+                action === 'com.jvhtec.lake-smaart.smaartfiletransport';
+        }
+
+        function render(instances) {
+            const container = document.getElementById('list');
+            if (!container) return;
+
+            if (!Array.isArray(instances) || instances.length === 0) {
+                container.innerHTML = '<div class="empty">No visible plugin actions yet. Put an action on the deck or make its page visible, then wait a moment.</div>';
+                return;
+            }
+
+            container.innerHTML = instances.map((instance) => {
+                const page = isDialAction(instance.action) ? 'dial' : 'key';
+                const href = '/' + page + '?action=' + encodeURIComponent(instance.action) +
+                    '&context=' + encodeURIComponent(instance.context) +
+                    '&wsPort=' + encodeURIComponent(String(location.port)) +
+                    '&token=' + encodeURIComponent(token);
+                const coords = instance.coordinates
+                    ? 'col ' + instance.coordinates.column + ', row ' + instance.coordinates.row
+                    : 'no coordinates';
+                const controller = instance.controller || 'Unknown';
+                return '<div class="item">' +
+                    '<div class="meta">' +
+                    '<div class="name">' + escapeHtml(actionLabel(instance.action)) + '</div>' +
+                    '<div class="sub">' + escapeHtml(controller + ' | ' + coords) + '</div>' +
+                    '<div class="sub">' + escapeHtml(instance.context) + '</div>' +
+                    '</div>' +
+                    '<a class="link" href="' + href + '">Open Inspector</a>' +
+                    '</div>';
+            }).join('');
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        async function refresh() {
+            try {
+                const response = await fetch('/instances?token=' + encodeURIComponent(token), { cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                const payload = await response.json();
+                render(payload.instances || []);
+            } catch (error) {
+                const container = document.getElementById('list');
+                if (container) {
+                    container.innerHTML = '<div class="empty">Unable to load visible actions from the plugin hub.</div>';
+                }
+            }
+        }
+
+        refresh();
+        setInterval(refresh, 1500);
+    </script>
+</body>
+</html>`;
 }
