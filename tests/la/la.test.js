@@ -96,7 +96,7 @@ test('LaHttpBackend discovers P1 input families and dedupes snapshot reads', asy
         groupedMuteTargets.map((target) => target.id).sort(),
         ['group:aes:1-4', 'group:ana:1-4', 'group:avb:1-4', 'group:avb:5-8']
     );
-    assert.ok(groupedMuteTargets.every((target) => target.supports.length === 1 && target.supports[0] === 'mute'));
+    assert.ok(groupedMuteTargets.every((target) => target.supports.includes('mute') && target.supports.includes('level')));
     assert.equal(presetTargets.length, 3);
 
     const before = countRequests(server.requests, 'GET', '/api/input/settings');
@@ -142,6 +142,32 @@ test('LaHttpBackend fans grouped P1 mute targets out to their member inputs', as
     assert.equal(restoredState.mute, false);
     assert.equal(countRequestsMatching(server.requests, 'POST', /^\/api\/input\/settings\/ana\/[1-4]\/mute$/), 8);
     assert.equal(server.state.inputSettings.ana.every((input) => input.mute === false), true);
+});
+
+test('LaHttpBackend fans grouped P1 level targets out to their member inputs', async (t) => {
+    const server = createMockLaServer({ profile: 'p1' });
+    const address = await server.start();
+    t.after(async () => server.stop());
+
+    const backend = new LaHttpBackend({
+        discoverySubnet: '192.168.1.0/24',
+        discoveryHosts: [`${address.host}:${address.port}`],
+    });
+
+    const [device] = await backend.discover();
+    const targets = await backend.getTargets(device);
+    const analogGroup = targets.find((target) => target.kind === 'input' && target.id === 'group:ana:1-4');
+
+    assert.ok(analogGroup);
+
+    const initialState = await backend.getState(analogGroup);
+    assert.equal(initialState.levelDb, -5);
+
+    await backend.setLevel(analogGroup, -10, 'gain');
+    const updatedState = await backend.getState(analogGroup);
+    assert.equal(updatedState.levelDb, -10);
+    assert.equal(countRequestsMatching(server.requests, 'POST', /^\/api\/input\/settings\/ana\/[1-4]\/gain$/), 4);
+    assert.equal(server.state.inputSettings.ana.every((input) => input.gain === -10), true);
 });
 
 test('LaHttpBackend uses one configuration library read for P1 target discovery', async (t) => {
@@ -273,6 +299,49 @@ test('LevelEncoderAction shows an alert instead of optimistic feedback on failur
     assert.equal(sdClient.alerts.length, 1);
     assert.equal(sdClient.feedback.length, 0);
     assert.match(sdClient.logs[0], /\[Level\] Failed/);
+});
+
+test('LevelEncoderAction accumulates rapid dial turns against optimistic state', async () => {
+    const sdClient = new FakeSDClient();
+    const deviceManager = new FakeDeviceManager({
+        targetState: { online: true, mute: false, levelDb: 0, lastUpdatedMs: Date.now() },
+    });
+    const action = new LevelEncoderAction(sdClient, deviceManager);
+
+    await Promise.all([
+        action.onDialRotate({
+            event: 'dialRotate',
+            context: 'ctx',
+            payload: {
+                ticks: 1,
+                settings: {
+                    targetId: 'la_http:la_device:input:ana:1',
+                    levelMode: 'gain',
+                    stepSize: 1,
+                    minLevel: -60,
+                    maxLevel: 15,
+                },
+            },
+        }),
+        action.onDialRotate({
+            event: 'dialRotate',
+            context: 'ctx',
+            payload: {
+                ticks: 1,
+                settings: {
+                    targetId: 'la_http:la_device:input:ana:1',
+                    levelMode: 'gain',
+                    stepSize: 1,
+                    minLevel: -60,
+                    maxLevel: 15,
+                },
+            },
+        }),
+    ]);
+
+    assert.equal(deviceManager.levelCalls, 2);
+    assert.deepEqual(deviceManager.levelValues, [1, 2]);
+    assert.equal(sdClient.feedback[sdClient.feedback.length - 1].payload.value, '2.0 dB');
 });
 
 test('Backend-scoped Lake mute action rejects L-Acoustics targets', async () => {
@@ -457,6 +526,7 @@ class FakeDeviceManager extends EventEmitter {
         };
         this.muteCalls = 0;
         this.levelCalls = 0;
+        this.levelValues = [];
         this.recallCalls = 0;
     }
 
@@ -483,8 +553,9 @@ class FakeDeviceManager extends EventEmitter {
         }
     }
 
-    async setLevel() {
+    async setLevel(_targetId, value) {
         this.levelCalls += 1;
+        this.levelValues.push(value);
         if (this.options.setLevelError) {
             throw this.options.setLevelError;
         }

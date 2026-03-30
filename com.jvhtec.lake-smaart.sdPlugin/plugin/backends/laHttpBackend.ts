@@ -54,14 +54,14 @@ interface OutputSnapshotCacheEntry {
 
 const P1_INPUT_FAMILIES: LaP1IndexedInputFamily[] = ['ana', 'aes', 'avb', 'mic'];
 
-interface P1MuteGroupDefinition {
+interface P1InputGroupDefinition {
     id: string;
     name: string;
     family: LaP1IndexedInputFamily;
     memberIds: string[];
 }
 
-const P1_MUTE_GROUPS: P1MuteGroupDefinition[] = [
+const P1_INPUT_GROUPS: P1InputGroupDefinition[] = [
     {
         id: 'group:ana:1-4',
         name: 'Analog Inputs 1-4',
@@ -148,7 +148,7 @@ export class LaHttpBackend implements Backend {
                     family: output.family,
                 });
             });
-            this.buildP1MuteGroupTargets(device.id, outputs, profile).forEach((target) => {
+            this.buildP1GroupedInputTargets(device.id, outputs, profile).forEach((target) => {
                 targets.push(target);
             });
         } else {
@@ -185,9 +185,15 @@ export class LaHttpBackend implements Backend {
                     throw new Error(`Grouped control target ${target.id} is missing one or more member inputs from the device snapshot.`);
                 }
                 const muteStates = groupedMembers.map((member) => coerceBoolean(member.state.mute));
+                const gainValues = groupedMembers
+                    .map((member) => coerceNumber(member.state.gain))
+                    .filter((value): value is number => value !== null);
                 return {
                     online: true,
                     mute: muteStates.every((state) => state !== null) ? muteStates.every((state) => state === true) : undefined,
+                    levelDb: gainValues.length > 0
+                        ? gainValues.reduce((sum, value) => sum + value, 0) / gainValues.length
+                        : undefined,
                     lastUpdatedMs: Date.now(),
                 };
             }
@@ -244,6 +250,28 @@ export class LaHttpBackend implements Backend {
         if (target.backend !== 'la_http' || target.kind === 'preset') return;
         const host = this.getDeviceHost(target.deviceId);
         const client = this.createClient(host);
+        const property = mode === 'volume' ? 'volume' : 'gain';
+
+        if (Array.isArray(target.memberIds) && target.memberIds.length > 0) {
+            const outputs = await this.getOutputsSnapshot(host, target.profile);
+            const groupedMembers = this.resolveGroupedMembers(outputs, target);
+            if (!groupedMembers) {
+                throw new Error(`Grouped control target ${target.id} is missing one or more member inputs from the device snapshot.`);
+            }
+
+            await Promise.all(
+                groupedMembers.map(async (member) => {
+                    const payload = mode === 'volume' ? Math.round(value) : value;
+                    const response = await this.withLimiter(host, () => client.post(laControlPropertyPath(member.path, property), payload));
+                    if (!isPropertyWriteSuccessStatus(response.status)) {
+                        throw createUnexpectedStatusError(response, [200, 204]);
+                    }
+                })
+            );
+
+            this.clearOutputSnapshot(host);
+            return;
+        }
 
         if (mode === 'volume') {
             if (!target.supports.includes('volume')) {
@@ -446,7 +474,7 @@ export class LaHttpBackend implements Backend {
         return outputs;
     }
 
-    private buildP1MuteGroupTargets(
+    private buildP1GroupedInputTargets(
         deviceId: string,
         outputs: LaResolvedControlTarget[],
         profile: LaHttpDeviceProfile
@@ -459,7 +487,7 @@ export class LaHttpBackend implements Backend {
             return [];
         }
 
-        return P1_MUTE_GROUPS
+        return P1_INPUT_GROUPS
             .map((group) => {
                 const members = group.memberIds.map((memberId) => pickResolvedControlTarget(outputs, memberId));
                 if (members.some((member) => !member)) {
@@ -472,7 +500,7 @@ export class LaHttpBackend implements Backend {
                     kind: 'input' as const,
                     id: group.id,
                     name: group.name,
-                    supports: ['mute'] as Array<'mute'>,
+                    supports: ['mute', 'level'] as Array<'mute' | 'level'>,
                     path: members[0]?.path || laP1InputSettingsPath(group.family, 1),
                     profile,
                     family: group.family,

@@ -61,9 +61,9 @@ The inspector also auto-refreshes after adapter and other global discovery chang
 **Property inspector settings**
 
 - Device: Auto-detected L-Acoustics device with at least one valid level target on the selected NIC.
-- Target: P1 input target or amplified-controller output target.
+- Target: P1 input target, grouped P1 input bank such as `Analog Inputs 1-4`, `AES Inputs 1-4`, `AVB Inputs 1-4`, or `AVB Inputs 5-8`, or an amplified-controller output target.
 - Mode: Gain (dB) or Volume (only when the selected target supports it).
-- Step Size: Increment per tick.
+- Step Size: Increment per tick. Fast continuous turns accumulate correctly even while the device state poll is catching up.
 - Min/Max: Clamp values for safety.
 
 ### Lake Mute (Button)

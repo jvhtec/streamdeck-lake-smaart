@@ -31,6 +31,7 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 
 - Control Lake LM module/group gain and mute with Stream Deck+ encoders.
 - Toggle mute on Lake LM module outputs and groups such as `All Modules`, plus documented L-Acoustics targets including individual P1 inputs, grouped P1 input banks such as `Analog Inputs 1-4` / `AVB Inputs 5-8`, and amplified-controller outputs.
+- Use the L-Acoustics level encoder against individual P1 inputs, grouped P1 input banks such as `Analog Inputs 1-4`, `AES Inputs 1-4`, `AVB Inputs 1-4`, and `AVB Inputs 5-8`, or amplified-controller outputs. Rapid dial turns are accumulated continuously instead of collapsing to a single step between polls.
 - Use dedicated `Lake` and `L-Acoustics` mute, level, and preset actions so each inspector only shows the relevant devices, targets, and backend discovery settings.
 - Force Lake input routers to `Auto`, `Priority 1`, `Priority 2`, `Priority 3`, or `Priority 4` from keys, including an optional push-count mode where one press selects `Priority 1`, two quick presses selects `Priority 2`, and so on. Router targets now include `All Routers` for frame-wide priority changes.
 - Recall Lake presets and L-Acoustics configurations from platform-specific key actions.
