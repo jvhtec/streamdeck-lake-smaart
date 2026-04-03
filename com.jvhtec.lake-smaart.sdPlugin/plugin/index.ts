@@ -460,7 +460,9 @@ sdClient.onEvents((event) => {
         }
 
         if (request === 'smaartSplCatalog') {
-            smaartClient.getActiveCalibratedInputs().then((result) => {
+            smaartClient.waitForReady(5000).then(() => {
+                return smaartClient.getActiveCalibratedInputs();
+            }).then((result) => {
                 const { inputs, metrics } = mapSmaartSplCatalog(result.response);
                 sdClient.sendToPropertyInspector(event.context, {
                     smaartSplInputs: inputs,

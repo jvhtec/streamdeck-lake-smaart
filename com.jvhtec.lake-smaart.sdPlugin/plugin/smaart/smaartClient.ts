@@ -150,6 +150,26 @@ export class SmaartClient {
         return this.ws?.readyState === WebSocket.OPEN && this.apiReady;
     }
 
+    public waitForReady(timeoutMs = 5000): Promise<boolean> {
+        if (this.isReady()) {
+            return Promise.resolve(true);
+        }
+        return new Promise((resolve) => {
+            const interval = 100;
+            let elapsed = 0;
+            const timer = setInterval(() => {
+                elapsed += interval;
+                if (this.isReady()) {
+                    clearInterval(timer);
+                    resolve(true);
+                } else if (elapsed >= timeoutMs) {
+                    clearInterval(timer);
+                    resolve(false);
+                }
+            }, interval);
+        });
+    }
+
     public send(command: object): boolean {
         const payload = JSON.stringify(command);
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
