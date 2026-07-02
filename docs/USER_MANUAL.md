@@ -112,6 +112,33 @@ If the host application shows an error such as `Failed to load URL: file:///C:/U
 - Target: Used configuration slot on the selected P1 or LC16D device.
 - Double Press: Require a second press within ~1.2s.
 
+### L-Acoustics A/B Delay (Button)
+
+- **Press**: Applies the opposite delay preset (A -> B or B -> A) to every amp host listed in the loaded preset config, then flips the stored active preset only if all HTTP requests succeed.
+- **Title**: Shows the active preset (`A` or `B`), or `A/B` before the first successful apply.
+- Delays are defined in milliseconds in the preset files and converted to samples with `delaySamples = Math.round(delayMs * sampleRate / 1000)`. Converted delays must fall within `0..96000` samples.
+- Each amp receives `POST http://<host>/api/control/dsp/output` with an array of `{ "delay": <samples> }` objects (one per output, all identical).
+
+**Preset config file format** (see `lacoustics-cardioid-preset-a.json` / `lacoustics-cardioid-preset-b.json` in the repo root for examples):
+
+```json
+{
+  "name": "Cardioid Preset A",
+  "delayUnit": "ms",
+  "targets": [
+    { "host": "192.168.1.133", "delayMs": 5.8 }
+  ]
+}
+```
+
+**Property inspector settings**
+
+- Config A File / Config B File: JSON preset files. The file is parsed and validated in the inspector and the parsed config is stored in the action settings (the file does not need to stay on disk).
+- Sample Rate (Hz): Used for the ms-to-samples conversion. Default `96000`.
+- Output Count: Number of output objects sent to each amp. Default `4`.
+- Use Digest Auth: Enables HTTP Digest authentication for amp requests.
+- Username / Password: Digest credentials. Defaults `admin` / `rest`.
+
 ### Lake Input Priority (Button)
 
 - **Press**: Forces the selected Lake input router, or `All Routers`, to the configured priority mode.

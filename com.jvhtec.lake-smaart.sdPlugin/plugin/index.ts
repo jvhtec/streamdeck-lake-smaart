@@ -8,6 +8,7 @@ import { LevelEncoderAction } from './actions/levelEncoderAction';
 import { MuteAction } from './actions/muteAction';
 import { PriorityAction } from './actions/priorityAction';
 import { PresetRecallAction } from './actions/presetRecallAction';
+import { LaAbDelayAction } from './actions/laAbDelayAction';
 import { SmaartClient } from './smaart/smaartClient';
 import { KeySmaartGenAction } from './actions/keySmaartGen';
 import { KeySmaartCaptureAction } from './actions/keySmaartCapture';
@@ -336,6 +337,7 @@ router.registerAction('com.jvhtec.lake-smaart.laPresetRecall', new PresetRecallA
     allowedBackend: 'la_http',
     logPrefix: 'L-Acoustics Preset',
 }));
+router.registerAction('com.jvhtec.lake-smaart.lacoustics-ab-delay', new LaAbDelayAction(sdClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartgengain', new SmaartGeneratorGainDialAction(sdClient, smaartClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartfiletransport', new SmaartFileTransportDialAction(sdClient));
 router.registerAction('com.jvhtec.lake-smaart.smaartgen', new KeySmaartGenAction(sdClient, smaartClient));
