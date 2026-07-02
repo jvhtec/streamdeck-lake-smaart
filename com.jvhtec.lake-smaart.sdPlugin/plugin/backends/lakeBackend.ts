@@ -201,12 +201,15 @@ export class LakeBackend implements Backend {
         }
 
         if (target.kind === 'group') {
-            const group = GROUPS[target.id];
+            const group = this.getGroup(target.id);
             const mutes = await Promise.all(
                 group.muteMembers.map((member) => this.readOutputMute(unit, target.deviceId, member.module))
             );
             const gains = await Promise.all(group.gainMembers.map((member) => this.readGain(unit, member.module)));
-            const muteState = mutes.every((mute) => mute === true);
+            const validMutes = mutes.filter((mute): mute is boolean => mute !== null);
+            const muteState = validMutes.length === mutes.length
+                ? validMutes.every((mute) => mute === true)
+                : undefined;
             const validGains = gains.filter((gain): gain is number => gain != null);
             const gainAverage = validGains.length > 0
                 ? validGains.reduce((sum, value) => sum + value, 0) / validGains.length
@@ -251,7 +254,7 @@ export class LakeBackend implements Backend {
         }
 
         if (target.kind === 'group') {
-            const group = GROUPS[target.id];
+            const group = this.getGroup(target.id);
             await Promise.all(
                 group.muteMembers.map((member) => this.setOutputMute(unit, target.deviceId, member.module, mute))
             );
@@ -274,7 +277,7 @@ export class LakeBackend implements Backend {
         }
 
         if (target.kind === 'group') {
-            const group = GROUPS[target.id];
+            const group = this.getGroup(target.id);
             await Promise.all(group.gainMembers.map((member) => this.client.send(buildSetGain(member.module, value), unit)));
         }
     }
@@ -494,6 +497,14 @@ export class LakeBackend implements Backend {
 
     private getUnitForTarget(target: TargetDescriptor) {
         return this.unitsByDeviceId.get(target.deviceId) || this.client.getKnownUnits().find((unit) => `lake:${unit.frameId}` === target.deviceId);
+    }
+
+    private getGroup(groupId: string) {
+        const group = GROUPS[groupId];
+        if (!group) {
+            throw new Error(`Lake group target ${groupId} is not available.`);
+        }
+        return group;
     }
 }
 

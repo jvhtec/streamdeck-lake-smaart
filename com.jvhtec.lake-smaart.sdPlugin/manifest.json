@@ -7,7 +7,7 @@
             "UUID": "com.jvhtec.lake-smaart.lakeLevel",
             "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
-                "Knob"
+                "Encoder"
             ],
             "Encoder": {
                 "layout": "layouts/dialValue.json"
@@ -26,7 +26,7 @@
             "UUID": "com.jvhtec.lake-smaart.laLevel",
             "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
-                "Knob"
+                "Encoder"
             ],
             "Encoder": {
                 "layout": "layouts/dialValue.json"
@@ -114,6 +114,22 @@
             ]
         },
         {
+            "Icon": "images/icon_la_preset_new_1774708117571",
+            "Name": "L-Acoustics A/B Delay",
+            "UUID": "com.jvhtec.lake-smaart.lacoustics-ab-delay",
+            "PropertyInspectorPath": "ui/key.html",
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "images/icon_la_preset_new_1774708117571",
+                    "TitleAlignment": "middle",
+                    "FontSize": "16"
+                }
+            ]
+        },
+        {
             "Icon": "images/actionDefault",
             "Name": "Lake Input Priority",
             "UUID": "com.jvhtec.lake-smaart.priority",
@@ -140,7 +156,7 @@
             "UUID": "com.jvhtec.lake-smaart.smaartgengain",
             "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
-                "Knob"
+                "Encoder"
             ],
             "Encoder": {
                 "layout": "layouts/dialValue.json"
@@ -164,7 +180,7 @@
             "UUID": "com.jvhtec.lake-smaart.smaartfiletransport",
             "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
-                "Knob"
+                "Encoder"
             ],
             "Encoder": {
                 "layout": "layouts/dialValue.json"

@@ -29,7 +29,7 @@ Open the property inspector for any action and set:
 - **LA Adapter IP**: Local adapter IP for L-Acoustics HTTP traffic. On multi-NIC systems, pick the NIC connected to the L-Acoustics control network so discovery and commands use the correct route. Changing it refreshes the action target lists to the devices discovered on that NIC.
 - **L-Acoustics Subnet**: Optional subnet override. Leave it blank to auto-derive a practical discovery subnet from the selected LA adapter.
 - **L-Acoustics Hosts**: Optional comma-separated list of device IPs to probe directly.
-- **HTTP User / Pass**: Credentials for Digest auth (defaults are `admin/admin` when enabled).
+- **HTTP User / Pass**: Optional credentials for L-Acoustics Digest auth.
 - **LA Debug Log**: Enables request/status logging for L-Acoustics discovery, polling, and writes during troubleshooting or hardware test sessions.
 - **Smaart Host / Port**: API endpoint for Smaart (default `127.0.0.1:26000`).
 
@@ -111,6 +111,33 @@ If the host application shows an error such as `Failed to load URL: file:///C:/U
 - Device: Auto-detected L-Acoustics device with at least one valid preset/configuration target on the selected NIC.
 - Target: Used configuration slot on the selected P1 or LC16D device.
 - Double Press: Require a second press within ~1.2s.
+
+### L-Acoustics A/B Delay (Button)
+
+- **Press**: Applies the opposite delay preset (A -> B or B -> A) to every amp host listed in the loaded preset config, then flips the stored active preset only if all HTTP requests succeed.
+- **Title**: Shows the active preset (`A` or `B`), or `A/B` before the first successful apply.
+- Delays are defined in milliseconds in the preset files and converted to samples with `delaySamples = Math.round(delayMs * sampleRate / 1000)`. Converted delays must fall within `0..96000` samples.
+- Each amp receives `POST http://<host>/api/control/dsp/output` with an array of `{ "delay": <samples> }` objects (one per output, all identical).
+
+**Preset config file format** (see `lacoustics-cardioid-preset-a.json` / `lacoustics-cardioid-preset-b.json` in the repo root for the current twelve-target cardioid presets):
+
+```json
+{
+  "name": "Cardioid Preset A",
+  "delayUnit": "ms",
+  "targets": [
+    { "host": "192.168.1.133", "delayMs": 5.8 }
+  ]
+}
+```
+
+**Property inspector settings**
+
+- Config A File / Config B File: JSON preset files. The file is parsed and validated in the inspector and the parsed config is stored in the action settings (the file does not need to stay on disk).
+- Sample Rate (Hz): Used for the ms-to-samples conversion. Default `96000`.
+- Output Count: Number of output objects sent to each amp. Default `4`.
+- Use Digest Auth: Enables HTTP Digest authentication for amp requests.
+- Username / Password: Digest credentials. Defaults `admin` / `rest`.
 
 ### Lake Input Priority (Button)
 

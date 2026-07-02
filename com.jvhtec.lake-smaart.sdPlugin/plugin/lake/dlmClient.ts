@@ -60,6 +60,7 @@ interface PendingRequest {
 export class DlmClient extends EventEmitter {
     private socket: dgram.Socket;
     private socketReady: Promise<void>;
+    private socketReadyFailed = false;
     private pendingRequests = new Map<number, PendingRequest>();
     private knownUnits = new Map<string, DlmDiscoveredUnit>();
     private msgIdCounter = 1;
@@ -92,8 +93,7 @@ export class DlmClient extends EventEmitter {
         this.debug = Boolean(config.debug);
 
         this.socket = this.createSocket();
-        this.socketReady = this.bind();
-        this.socketReady.catch(() => undefined);
+        this.socketReady = this.bindSocket();
     }
 
     public updateConfig(config: Partial<DlmClientConfig>) {
@@ -132,7 +132,7 @@ export class DlmClient extends EventEmitter {
     }
 
     public async discoverUnits(timeoutMs = 1500): Promise<DlmDiscoveredUnit[]> {
-        await this.socketReady;
+        await this.ensureSocketReady();
 
         const discovered = new Map<string, DlmDiscoveredUnit>();
         const onUnit = (unit: DlmDiscoveredUnit) => {
@@ -165,7 +165,7 @@ export class DlmClient extends EventEmitter {
     }
 
     public async send(command: string, target: DlmTarget, retries = 2, timeoutMs = 750): Promise<DlmMessagePacket | null> {
-        await this.socketReady;
+        await this.ensureSocketReady();
 
         const msgId = this.nextMsgId();
         const packet = encodeDlmMsg(command, {
@@ -270,8 +270,24 @@ export class DlmClient extends EventEmitter {
         }
 
         this.socket = this.createSocket();
-        this.socketReady = this.bind();
-        this.socketReady.catch(() => undefined);
+        this.socketReady = this.bindSocket();
+    }
+
+    private bindSocket() {
+        this.socketReadyFailed = false;
+        const ready = this.bind();
+        ready.catch(() => {
+            this.socketReadyFailed = true;
+        });
+        return ready;
+    }
+
+    private async ensureSocketReady() {
+        if (this.socketReadyFailed) {
+            this.recreateSocket();
+        }
+
+        await this.socketReady;
     }
 
     private bind() {
@@ -522,5 +538,13 @@ function isIpv4Address(value: string) {
 }
 
 function isLoopbackAddress(value: string) {
-    return value === '127.0.0.1';
+    const octets = value.split('.');
+    if (octets.length !== 4) {
+        return false;
+    }
+
+    return octets[0] === '127' && octets.every((octet) => {
+        const numeric = Number(octet);
+        return Number.isInteger(numeric) && numeric >= 0 && numeric <= 255;
+    });
 }

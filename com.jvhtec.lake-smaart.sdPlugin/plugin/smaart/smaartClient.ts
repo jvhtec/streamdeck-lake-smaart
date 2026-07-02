@@ -11,6 +11,7 @@ export interface SmaartMeasurementTarget {
     measurementType: 'spectrum' | 'transferFunction';
     active: boolean;
     trackingDelay?: boolean;
+    visible?: boolean;
 }
 
 export interface SmaartSignalGeneratorStatus {
@@ -47,6 +48,8 @@ export class SmaartClient {
     private apiReady = false;
     private pendingCommands: QueuedCommand[] = [];
     private activeRequest: PendingRequest | null = null;
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    private reconnectDelayMs = 1000;
 
     constructor(host: string, port: number) {
         this.host = host;
@@ -54,7 +57,12 @@ export class SmaartClient {
     }
 
     public setTarget(host: string, port: number) {
+        if (this.host === host && this.port === port) {
+            return;
+        }
+
         const previousWs = this.ws;
+        this.clearReconnectTimer();
         this.host = host;
         this.port = port;
         this.ws = null;
@@ -72,9 +80,11 @@ export class SmaartClient {
             const previousWs = this.ws;
 
             if (previousWs && (previousWs.readyState === WebSocket.OPEN || previousWs.readyState === WebSocket.CONNECTING)) {
-                previousWs.close();
+                this.clearReconnectTimer();
+                return;
             }
 
+            this.clearReconnectTimer();
             console.log(`[Smaart] Connecting to ${wsUrl}`);
             const ws = new WebSocket(wsUrl);
             this.ws = ws;
@@ -105,6 +115,7 @@ export class SmaartClient {
                 if (response.authenticationRequired === true) {
                     this.isConnected = false;
                     this.apiReady = false;
+                    this.clearPending('Smaart API authentication is required.');
                     console.error('[Smaart] API authentication is required, but this plugin does not yet send a password.');
                     return;
                 }
@@ -114,6 +125,7 @@ export class SmaartClient {
                     this.apiReady = true;
                     console.log(`[Smaart] API ready on ${this.host}:${this.port}`);
                     this.dispatchNextCommand();
+                    return;
                 }
 
                 if (response.error) {
@@ -130,6 +142,7 @@ export class SmaartClient {
                 this.ws = null;
                 this.clearPending('Connection closed');
                 console.log(`[Smaart] Disconnected from ${this.host}:${this.port}`);
+                this.scheduleReconnect();
             });
 
             ws.on('error', (err: Error) => {
@@ -138,6 +151,7 @@ export class SmaartClient {
                 this.apiReady = false;
                 this.clearPending(err.message);
                 console.error(`[Smaart] Connection error: ${err.message}`);
+                this.scheduleReconnect();
             });
         } catch (e) {
             this.isConnected = false;
@@ -148,6 +162,18 @@ export class SmaartClient {
 
     public isReady() {
         return this.ws?.readyState === WebSocket.OPEN && this.apiReady;
+    }
+
+    public close() {
+        const previousWs = this.ws;
+        this.clearReconnectTimer();
+        this.ws = null;
+        this.isConnected = false;
+        this.apiReady = false;
+        this.clearPending('Smaart client closed');
+        if (previousWs && (previousWs.readyState === WebSocket.OPEN || previousWs.readyState === WebSocket.CONNECTING)) {
+            previousWs.close();
+        }
     }
 
     public waitForReady(timeoutMs = 5000): Promise<boolean> {
@@ -172,6 +198,7 @@ export class SmaartClient {
 
     public send(command: object): boolean {
         const payload = JSON.stringify(command);
+        this.ensureSocket();
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             this.pendingCommands.push({ payload, timeoutMs: 1500 });
             if (this.apiReady) {
@@ -302,6 +329,32 @@ export class SmaartClient {
         });
     }
 
+    public async getActiveTraceVisibility(): Promise<SmaartCommandResult> {
+        const measurement = await this.getActiveMeasurement();
+        if (!measurement) {
+            return {
+                ok: false,
+                error: 'No active Smaart measurement is available for trace visibility.',
+            };
+        }
+
+        if (typeof measurement.visible !== 'boolean') {
+            return {
+                ok: false,
+                error: 'The active Smaart measurement did not report trace visibility.',
+            };
+        }
+
+        return {
+            ok: true,
+            response: {
+                measurementName: measurement.measurementName,
+                measurementType: measurement.measurementType,
+                visible: measurement.visible,
+            },
+        };
+    }
+
     private dispatchNextCommand() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.apiReady || this.activeRequest) {
             return;
@@ -395,12 +448,30 @@ export class SmaartClient {
                 active: Boolean(measurement.active),
                 trackingDelay:
                     typeof measurement.trackingDelay === 'boolean' ? measurement.trackingDelay : undefined,
+                visible: this.pickTraceVisibility(measurement, measurementType),
             }));
+    }
+
+    private pickTraceVisibility(
+        measurement: any,
+        measurementType: SmaartMeasurementTarget['measurementType']
+    ): boolean | undefined {
+        if (measurementType === 'transferFunction') {
+            const values = [
+                measurement.includeMagnitude,
+                measurement.includePhase,
+                measurement.includeCoherence,
+            ].filter((value): value is boolean => typeof value === 'boolean');
+            return values.length > 0 ? values.some((value) => value) : undefined;
+        }
+
+        return typeof measurement.includeMagnitude === 'boolean' ? measurement.includeMagnitude : undefined;
     }
 
     private request(command: object, timeoutMs = 1500): Promise<SmaartCommandResult> {
         const payload = JSON.stringify(command);
 
+        this.ensureSocket();
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return new Promise((resolve) => {
                 this.pendingCommands.push({ payload, resolve, timeoutMs });
@@ -456,5 +527,31 @@ export class SmaartClient {
                 error: reason,
             });
         }
+    }
+
+    private ensureSocket() {
+        if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
+            this.connect();
+        }
+    }
+
+    private scheduleReconnect() {
+        if (this.reconnectTimer) {
+            return;
+        }
+
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            this.connect();
+        }, this.reconnectDelayMs);
+    }
+
+    private clearReconnectTimer() {
+        if (!this.reconnectTimer) {
+            return;
+        }
+
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
     }
 }
