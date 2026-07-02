@@ -132,7 +132,7 @@ export class DlmClient extends EventEmitter {
     }
 
     public async discoverUnits(timeoutMs = 1500): Promise<DlmDiscoveredUnit[]> {
-        await this.socketReady;
+        await this.ensureSocketReady();
 
         const discovered = new Map<string, DlmDiscoveredUnit>();
         const onUnit = (unit: DlmDiscoveredUnit) => {
@@ -165,7 +165,7 @@ export class DlmClient extends EventEmitter {
     }
 
     public async send(command: string, target: DlmTarget, retries = 2, timeoutMs = 750): Promise<DlmMessagePacket | null> {
-        await this.socketReady;
+        await this.ensureSocketReady();
 
         const msgId = this.nextMsgId();
         const packet = encodeDlmMsg(command, {
@@ -257,6 +257,17 @@ export class DlmClient extends EventEmitter {
 
     private getResponseMode() {
         return this.port === DLM_FIXED_DEVICE_PORT ? 'fixed' : 'dynamic';
+    }
+
+    private async ensureSocketReady() {
+        try {
+            await this.socketReady;
+        } catch {
+            // A failed bind (adapter briefly missing, port in use) would
+            // otherwise poison socketReady forever; retry once per call.
+            this.recreateSocket();
+            await this.socketReady;
+        }
     }
 
     private recreateSocket() {
@@ -522,5 +533,5 @@ function isIpv4Address(value: string) {
 }
 
 function isLoopbackAddress(value: string) {
-    return value === '127.0.0.1';
+    return value.startsWith('127.');
 }

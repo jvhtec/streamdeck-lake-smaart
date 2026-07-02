@@ -47,13 +47,20 @@ export class SmaartClient {
     private apiReady = false;
     private pendingCommands: QueuedCommand[] = [];
     private activeRequest: PendingRequest | null = null;
+    private reconnectDelayMs: number;
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    constructor(host: string, port: number) {
+    constructor(host: string, port: number, reconnectDelayMs = 5000) {
         this.host = host;
         this.port = port;
+        this.reconnectDelayMs = reconnectDelayMs;
     }
 
     public setTarget(host: string, port: number) {
+        if (this.host === host && this.port === port) {
+            // Same target; keep the existing connection (and its queue) alive.
+            return;
+        }
         const previousWs = this.ws;
         this.host = host;
         this.port = port;
@@ -67,14 +74,11 @@ export class SmaartClient {
     }
 
     public connect() {
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
         try {
             const wsUrl = `ws://${this.host}:${this.port}/api/v4/`;
-            const previousWs = this.ws;
-
-            if (previousWs && (previousWs.readyState === WebSocket.OPEN || previousWs.readyState === WebSocket.CONNECTING)) {
-                previousWs.close();
-            }
-
             console.log(`[Smaart] Connecting to ${wsUrl}`);
             const ws = new WebSocket(wsUrl);
             this.ws = ws;
@@ -114,6 +118,10 @@ export class SmaartClient {
                     this.apiReady = true;
                     console.log(`[Smaart] API ready on ${this.host}:${this.port}`);
                     this.dispatchNextCommand();
+                    // The handshake response is not a reply to any queued request;
+                    // falling through here would resolve the request that
+                    // dispatchNextCommand just sent with the wrong payload.
+                    return;
                 }
 
                 if (response.error) {
@@ -130,6 +138,7 @@ export class SmaartClient {
                 this.ws = null;
                 this.clearPending('Connection closed');
                 console.log(`[Smaart] Disconnected from ${this.host}:${this.port}`);
+                this.scheduleReconnect();
             });
 
             ws.on('error', (err: Error) => {
@@ -143,6 +152,22 @@ export class SmaartClient {
             this.isConnected = false;
             this.apiReady = false;
             console.error(`[Smaart] Exception during connect: ${e}`);
+        }
+    }
+
+    /** Closes the connection and stops auto-reconnection. */
+    public close() {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        const ws = this.ws;
+        this.ws = null;
+        this.isConnected = false;
+        this.apiReady = false;
+        this.clearPending('Client closed');
+        if (ws) {
+            ws.close();
         }
     }
 
@@ -300,6 +325,21 @@ export class SmaartClient {
             target: { measurementName: measurement.measurementName },
             properties,
         });
+    }
+
+    private scheduleReconnect() {
+        if (this.reconnectTimer) {
+            return;
+        }
+        const timer = setTimeout(() => {
+            this.reconnectTimer = null;
+            if (!this.isReady()) {
+                this.connect();
+            }
+        }, this.reconnectDelayMs);
+        // Reconnection must not keep the process alive on its own.
+        timer.unref?.();
+        this.reconnectTimer = timer;
     }
 
     private dispatchNextCommand() {

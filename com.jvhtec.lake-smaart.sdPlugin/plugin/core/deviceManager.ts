@@ -20,6 +20,7 @@ export class DeviceManager extends EventEmitter {
     private pollTimer: NodeJS.Timeout | null = null;
     private discoveryTimer: NodeJS.Timeout | null = null;
     private refreshInFlight: Promise<void> | null = null;
+    private pollInFlight = false;
     private lastPresetPoll = 0;
 
     constructor(backends: Backend[]) {
@@ -37,11 +38,15 @@ export class DeviceManager extends EventEmitter {
         if (this.discoveryTimer) clearInterval(this.discoveryTimer);
     }
 
-    public async refreshCatalog() {
+    public refreshCatalog(): Promise<void> {
         if (this.refreshInFlight) return this.refreshInFlight;
-        this.refreshInFlight = this.refreshCatalogInternal();
-        await this.refreshInFlight;
-        this.refreshInFlight = null;
+        const refresh = this.refreshCatalogInternal().finally(() => {
+            if (this.refreshInFlight === refresh) {
+                this.refreshInFlight = null;
+            }
+        });
+        this.refreshInFlight = refresh;
+        return refresh;
     }
 
     private async refreshCatalogInternal() {
@@ -88,7 +93,16 @@ export class DeviceManager extends EventEmitter {
 
     private startPolling() {
         this.pollTimer = setInterval(() => {
-            this.pollOnce().catch(() => undefined);
+            // Never let polls overlap: a slow or offline device would otherwise
+            // accumulate concurrent polls (and duplicate UDP/HTTP traffic)
+            // faster than they can time out.
+            if (this.pollInFlight) return;
+            this.pollInFlight = true;
+            this.pollOnce()
+                .catch(() => undefined)
+                .finally(() => {
+                    this.pollInFlight = false;
+                });
         }, 300);
     }
 
@@ -116,10 +130,12 @@ export class DeviceManager extends EventEmitter {
                     this.emit('targetStateUpdated', target, state);
                 } catch (error) {
                     this.emit('log', `State poll failed for ${this.getTargetId(target)}: ${formatError(error)}`);
-                    this.targetStates.set(this.getTargetId(target), {
+                    const offlineState: TargetState = {
                         online: false,
                         lastUpdatedMs: Date.now(),
-                    });
+                    };
+                    this.targetStates.set(this.getTargetId(target), offlineState);
+                    this.emit('targetStateUpdated', target, offlineState);
                 }
             })
         );
@@ -143,10 +159,12 @@ export class DeviceManager extends EventEmitter {
                         this.emit('deviceStateUpdated', device, this.deviceStates.get(deviceId));
                     } catch (error) {
                         this.emit('log', `Preset poll failed for ${deviceId}: ${formatError(error)}`);
-                        this.deviceStates.set(deviceId, {
+                        const offlineState: DeviceState = {
                             online: false,
                             lastUpdatedMs: Date.now(),
-                        });
+                        };
+                        this.deviceStates.set(deviceId, offlineState);
+                        this.emit('deviceStateUpdated', device, offlineState);
                     }
                 })
             );

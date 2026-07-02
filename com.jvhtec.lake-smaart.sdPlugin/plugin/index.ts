@@ -415,25 +415,25 @@ sdClient.onEvents((event) => {
         }
     }
 
-    // Auto-open browser PI when the embedded PI can't load
-    if (piServerReady && event.event === 'propertyInspectorDidAppear') {
-        openInspectorContexts.add(event.context);
-        const piEvent = event;
-        piServerReady.then(() => {
-            if (!piServerPort) return;
-            const isDialAction =
-                piEvent.action === 'com.jvhtec.lake-smaart.lakeLevel' ||
-                piEvent.action === 'com.jvhtec.lake-smaart.laLevel' ||
-                piEvent.action === 'com.jvhtec.lake-smaart.smaartgengain' ||
-                piEvent.action === 'com.jvhtec.lake-smaart.smaartfiletransport';
-            const page = isDialAction ? 'dial' : 'key';
-            const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(piEvent.action)}&context=${encodeURIComponent(piEvent.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
-            sdClient.openUrl(url);
-        });
-    }
     if (event.event === 'propertyInspectorDidAppear') {
         openInspectorContexts.add(event.context);
         sdClient.sendToPropertyInspector(event.context, buildInspectorCatalog());
+
+        // Auto-open browser PI when the embedded PI can't load
+        if (piServerReady) {
+            const piEvent = event;
+            piServerReady.then(() => {
+                if (!piServerPort) return;
+                const isDialAction =
+                    piEvent.action === 'com.jvhtec.lake-smaart.lakeLevel' ||
+                    piEvent.action === 'com.jvhtec.lake-smaart.laLevel' ||
+                    piEvent.action === 'com.jvhtec.lake-smaart.smaartgengain' ||
+                    piEvent.action === 'com.jvhtec.lake-smaart.smaartfiletransport';
+                const page = isDialAction ? 'dial' : 'key';
+                const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(piEvent.action)}&context=${encodeURIComponent(piEvent.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
+                sdClient.openUrl(url);
+            });
+        }
     }
     if (event.event === 'willDisappear') {
         openInspectorContexts.delete(event.context);
@@ -465,6 +465,11 @@ sdClient.onEvents((event) => {
             smaartClient.waitForReady(5000).then((isReady) => {
                 if (!isReady) {
                     sdClient.logMessage('Smaart client not ready after timeout');
+                    sdClient.sendToPropertyInspector(event.context, {
+                        smaartSplInputs: [],
+                        smaartSplMetrics: [],
+                        smaartSplError: 'Not connected to Smaart.',
+                    });
                     return;
                 }
                 return smaartClient.getActiveCalibratedInputs();

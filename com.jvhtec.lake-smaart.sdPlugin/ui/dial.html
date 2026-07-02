@@ -237,17 +237,6 @@ function getRequiredBackend() {
     return null;
 }
 
-function getRequiredBackend() {
-    const name = getActionName();
-    if (name === 'lakeLevel' || name === 'priority') {
-        return 'lake';
-    }
-    if (name === 'laLevel') {
-        return 'la_http';
-    }
-    return null;
-}
-
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
     uuid = inPropertyInspectorUUID;
     actionInfo = JSON.parse(inActionInfo);

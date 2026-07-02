@@ -85,6 +85,9 @@ export class PresetRecallAction implements Action {
             }
         }
 
+        // Require a fresh confirmation cycle for the next recall attempt.
+        this.lastPress.delete(e.context);
+
         try {
             await this.deviceManager.recallPreset(targetId);
             this.sdClient.showOk(e.context);

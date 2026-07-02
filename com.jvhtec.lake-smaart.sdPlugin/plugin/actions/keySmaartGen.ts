@@ -15,6 +15,16 @@ export class KeySmaartGenAction implements Action {
 
     onWillAppear(event: WillAppearEvent): void {
         this.sdClient.setState(event.context, this.state ? 1 : 0);
+        void this.refreshState(event.context);
+    }
+
+    private async refreshState(context: string) {
+        const result = await this.smaart.getSignalGeneratorStatus();
+        if (!result.ok) {
+            return;
+        }
+        this.state = Boolean(result.response?.active);
+        this.sdClient.setState(context, this.state ? 1 : 0);
     }
 
     async onKeyDown(event: IncomingEvent): Promise<void> {

@@ -331,23 +331,14 @@ export class LaHttpBackend implements Backend {
     }
 
     private expandSubnet(subnet: string): string[] {
-        const match = subnet.match(/^(\d+\.\d+\.\d+)\.(\d+)-(\d+)$/);
-        if (match) {
-            const base = match[1];
-            const start = parseInt(match[2], 10);
-            const end = parseInt(match[3], 10);
-            const hosts: string[] = [];
-            for (let i = start; i <= end; i++) {
-                hosts.push(`${base}.${i}`);
-            }
-            return hosts;
+        const hosts = expandLaDiscoverySubnet(subnet);
+        if (!hosts) {
+            this.logDebug(
+                `Unsupported LA discovery subnet "${subnet}"; use CIDR /24../32 (e.g. 192.168.1.0/24) or a range (e.g. 192.168.1.20-40).`
+            );
+            return [];
         }
-        const cidrMatch = subnet.match(/^(\d+\.\d+\.\d+)\.0\/24$/);
-        if (cidrMatch) {
-            const base = cidrMatch[1];
-            return Array.from({ length: 254 }, (_, i) => `${base}.${i + 1}`);
-        }
-        return [];
+        return hosts;
     }
 
     private async worker(queue: string[], results: DeviceDescriptor[]) {
@@ -658,6 +649,81 @@ export class LaHttpBackend implements Backend {
             this.logger(`[LA] ${message}`);
         }
     }
+}
+
+/**
+ * Expands an LA discovery subnet into scan hosts. Supports last-octet ranges
+ * ("192.168.1.20-40") and CIDR prefixes /24../32. Returns null when the format
+ * is unsupported (prefixes below /24 are refused to avoid huge scans).
+ */
+export function expandLaDiscoverySubnet(subnet: string): string[] | null {
+    const trimmed = subnet.trim();
+
+    const rangeMatch = trimmed.match(/^(\d+\.\d+\.\d+)\.(\d+)-(\d+)$/);
+    if (rangeMatch) {
+        const base = rangeMatch[1];
+        const start = parseInt(rangeMatch[2], 10);
+        const end = parseInt(rangeMatch[3], 10);
+        if (start > end || end > 255) {
+            return null;
+        }
+        const hosts: string[] = [];
+        for (let i = start; i <= end; i++) {
+            hosts.push(`${base}.${i}`);
+        }
+        return hosts;
+    }
+
+    const cidrMatch = trimmed.match(/^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/);
+    if (!cidrMatch) {
+        return null;
+    }
+    const baseInt = ipv4ToUint(cidrMatch[1]);
+    const prefixLength = parseInt(cidrMatch[2], 10);
+    if (baseInt === null || prefixLength < 24 || prefixLength > 32) {
+        return null;
+    }
+    if (prefixLength === 32) {
+        return [uintToIpv4(baseInt)];
+    }
+
+    const mask = (0xffffffff << (32 - prefixLength)) >>> 0;
+    const network = (baseInt & mask) >>> 0;
+    const broadcast = (network | (~mask >>> 0)) >>> 0;
+    if (prefixLength === 31) {
+        return [uintToIpv4(network), uintToIpv4(broadcast)];
+    }
+
+    const hosts: string[] = [];
+    for (let address = network + 1; address < broadcast; address++) {
+        hosts.push(uintToIpv4(address));
+    }
+    return hosts;
+}
+
+function ipv4ToUint(address: string): number | null {
+    const octets = address.split('.');
+    if (octets.length !== 4) {
+        return null;
+    }
+    let value = 0;
+    for (const octet of octets) {
+        const numeric = Number(octet);
+        if (!Number.isInteger(numeric) || numeric < 0 || numeric > 255) {
+            return null;
+        }
+        value = ((value << 8) | numeric) >>> 0;
+    }
+    return value >>> 0;
+}
+
+function uintToIpv4(value: number): string {
+    return [
+        (value >>> 24) & 255,
+        (value >>> 16) & 255,
+        (value >>> 8) & 255,
+        value & 255,
+    ].join('.');
 }
 
 function safeParseConfigurationLibrary(value: unknown): LaConfigurationSlot[] | null {

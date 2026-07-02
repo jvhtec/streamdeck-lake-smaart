@@ -10,7 +10,8 @@
     "test:lake": "npm run build && node --test tests/lake/**/*.test.js",
     "lake:mock": "node scripts/mock-lake-dlm.js",
     "lake:selftest": "node scripts/lake-selftest.js",
-    "postbuild": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/copy-runtime-deps.ps1",
+    "postbuild": "node scripts/copy-runtime-deps.js",
+    "test:core": "npm run build && node --test tests/core/**/*.test.js tests/smaart/**/*.test.js",
     "watch": "tsc -w"
   },
   "dependencies": {

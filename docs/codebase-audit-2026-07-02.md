@@ -13,6 +13,16 @@ Verification performed in a Linux container:
 Findings are ordered by severity. File references are `path:line` against the current
 `main`/audit branch tree.
 
+> **Fix status (2026-07-02, same branch):** H1–H5, M1–M4, M6, M7 fixed; M5 fixed for the
+> generator key (the trace toggle still has no Smaart query to seed from). Low items fixed:
+> dead `ui/inspector.js` removed, duplicate `getRequiredBackend` in `dial.html` removed,
+> duplicate `propertyInspectorDidAppear` blocks merged, `smaartSplCatalog` timeout now
+> reports an error to the PI, group mute is `undefined` when unreadable, loopback detection
+> covers `127.x.x.x`, `debug.log` removed/ignored, `.gitignore` refreshed. Regression tests
+> live in `tests/smaart/`, `tests/core/`, and `tests/la/subnet.test.js`. Still open: the
+> design suggestions (secrets in per-action settings, `"Knob"` controller verification, poll
+> cadence) and the M5 trace-toggle half.
+
 ---
 
 ## High severity
