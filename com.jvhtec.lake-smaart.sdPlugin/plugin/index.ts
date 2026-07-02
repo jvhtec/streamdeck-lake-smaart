@@ -225,7 +225,9 @@ function hasDiscoverySettings(settings: Record<string, any> | undefined | null) 
 }
 
 function applyDiscoverySettings(settings: Record<string, any>, options: { ignoreEmptyValues?: boolean } = {}) {
+    const previousDiscoverySettings = currentDiscoverySettings;
     currentDiscoverySettings = mergeDiscoverySettings(currentDiscoverySettings, settings, options);
+    const changed = discoverySettingKeys.some((key) => previousDiscoverySettings[key] !== currentDiscoverySettings[key]);
 
     const configuredLakePort = Number(currentDiscoverySettings.lakePort);
     const usesLegacyLakePort = !configuredLakePort || configuredLakePort === 1024;
@@ -287,6 +289,8 @@ function applyDiscoverySettings(settings: Record<string, any>, options: { ignore
             lakePort: resolvedLakePort,
         };
     }
+
+    return changed;
 }
 
 function mapSmaartSplCatalog(response: any) {
@@ -415,25 +419,24 @@ sdClient.onEvents((event) => {
         }
     }
 
-    // Auto-open browser PI when the embedded PI can't load
-    if (piServerReady && event.event === 'propertyInspectorDidAppear') {
-        openInspectorContexts.add(event.context);
-        const piEvent = event;
-        piServerReady.then(() => {
-            if (!piServerPort) return;
-            const isDialAction =
-                piEvent.action === 'com.jvhtec.lake-smaart.lakeLevel' ||
-                piEvent.action === 'com.jvhtec.lake-smaart.laLevel' ||
-                piEvent.action === 'com.jvhtec.lake-smaart.smaartgengain' ||
-                piEvent.action === 'com.jvhtec.lake-smaart.smaartfiletransport';
-            const page = isDialAction ? 'dial' : 'key';
-            const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(piEvent.action)}&context=${encodeURIComponent(piEvent.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
-            sdClient.openUrl(url);
-        });
-    }
     if (event.event === 'propertyInspectorDidAppear') {
         openInspectorContexts.add(event.context);
         sdClient.sendToPropertyInspector(event.context, buildInspectorCatalog());
+
+        if (piServerReady) {
+            const piEvent = event;
+            piServerReady.then(() => {
+                if (!piServerPort) return;
+                const isDialAction =
+                    piEvent.action === 'com.jvhtec.lake-smaart.lakeLevel' ||
+                    piEvent.action === 'com.jvhtec.lake-smaart.laLevel' ||
+                    piEvent.action === 'com.jvhtec.lake-smaart.smaartgengain' ||
+                    piEvent.action === 'com.jvhtec.lake-smaart.smaartfiletransport';
+                const page = isDialAction ? 'dial' : 'key';
+                const url = `http://${piServerHost}:${piServerPort}/${page}?action=${encodeURIComponent(piEvent.action)}&context=${encodeURIComponent(piEvent.context)}&wsPort=${piServerPort}&token=${encodeURIComponent(piServerToken)}`;
+                sdClient.openUrl(url);
+            });
+        }
     }
     if (event.event === 'willDisappear') {
         openInspectorContexts.delete(event.context);
@@ -442,12 +445,16 @@ sdClient.onEvents((event) => {
 
     if (event.event === 'didReceiveGlobalSettings') {
         const settings = event.payload.settings || {};
-        applyDiscoverySettings(settings);
-        deviceManager.refreshCatalog().catch(() => undefined);
+        const discoveryChanged = applyDiscoverySettings(settings);
+        if (discoveryChanged) {
+            deviceManager.refreshCatalog().catch(() => undefined);
+        }
     }
     if ((event.event === 'didReceiveSettings' || event.event === 'willAppear') && hasDiscoverySettings(event.payload?.settings)) {
-        applyDiscoverySettings(event.payload.settings || {}, { ignoreEmptyValues: true });
-        deviceManager.refreshCatalog().catch(() => undefined);
+        const discoveryChanged = applyDiscoverySettings(event.payload.settings || {}, { ignoreEmptyValues: true });
+        if (discoveryChanged) {
+            deviceManager.refreshCatalog().catch(() => undefined);
+        }
     }
     if (event.event === 'sendToPlugin') {
         const request = event.payload?.request;
@@ -465,7 +472,11 @@ sdClient.onEvents((event) => {
             smaartClient.waitForReady(5000).then((isReady) => {
                 if (!isReady) {
                     sdClient.logMessage('Smaart client not ready after timeout');
-                    return;
+                    return {
+                        ok: false,
+                        error: 'Smaart client not ready after timeout',
+                        response: null,
+                    };
                 }
                 return smaartClient.getActiveCalibratedInputs();
             }).then((result) => {

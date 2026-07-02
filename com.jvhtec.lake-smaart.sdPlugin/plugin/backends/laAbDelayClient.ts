@@ -141,13 +141,19 @@ export interface AbDelayApplyOptions {
 }
 
 export async function applyAbDelayPreset(config: AbDelayConfig, options: AbDelayApplyOptions): Promise<void> {
+    const sampleRate = coercePositiveInteger(options.sampleRate, AB_DELAY_DEFAULT_SAMPLE_RATE);
+    const outputCount = Math.min(
+        coercePositiveInteger(options.outputCount, AB_DELAY_DEFAULT_OUTPUT_COUNT),
+        AB_DELAY_MAX_OUTPUT_COUNT
+    );
+
     // Convert and range-check every target up front so a bad entry never
     // leaves the fleet half-applied.
     const jobs = config.targets.map((target) => {
-        const delaySamples = delayMsToSamples(target.delayMs, options.sampleRate);
+        const delaySamples = delayMsToSamples(target.delayMs, sampleRate);
         if (delaySamples < AB_DELAY_MIN_SAMPLES || delaySamples > AB_DELAY_MAX_SAMPLES) {
             throw new Error(
-                `${target.host}: ${target.delayMs} ms at ${options.sampleRate} Hz is ${delaySamples} samples; ` +
+                `${target.host}: ${target.delayMs} ms at ${sampleRate} Hz is ${delaySamples} samples; ` +
                 `allowed range is ${AB_DELAY_MIN_SAMPLES}..${AB_DELAY_MAX_SAMPLES}.`
             );
         }
@@ -164,7 +170,7 @@ export async function applyAbDelayPreset(config: AbDelayConfig, options: AbDelay
                 logger: options.logger,
             }
         );
-        const body = Array.from({ length: options.outputCount }, () => ({ delay: delaySamples }));
+        const body = Array.from({ length: outputCount }, () => ({ delay: delaySamples }));
         const response = await client.post(laAmplifiedOutputsPath(), body);
         if (!isPropertyWriteSuccessStatus(response.status)) {
             throw createUnexpectedStatusError(response, [200, 204]);

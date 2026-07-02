@@ -23,6 +23,20 @@ test('deriveDiscoverySubnet narrows broad adapter masks to a practical /24 scan 
     assert.equal(prefixLengthFromNetmask('255.255.0.0'), 16);
 });
 
+test('LaHttpBackend expands derived CIDR subnets narrower than /24', () => {
+    const backend = new LaHttpBackend({
+        discoverySubnet: '192.168.1.128/25',
+        discoveryHosts: [],
+    });
+
+    const hosts = backend.expandSubnet('192.168.1.128/25');
+
+    assert.equal(hosts.length, 126);
+    assert.equal(hosts[0], '192.168.1.129');
+    assert.equal(hosts[hosts.length - 1], '192.168.1.254');
+    assert.deepEqual(backend.expandSubnet('192.168.1.132/30'), ['192.168.1.133', '192.168.1.134']);
+});
+
 test('LaHttpClient retries digest auth on HTTP 401 without leaking credentials', async (t) => {
     const server = createMockLaServer({
         auth: {

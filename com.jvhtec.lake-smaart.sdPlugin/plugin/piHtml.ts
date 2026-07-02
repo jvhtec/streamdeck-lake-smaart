@@ -67,6 +67,48 @@ const SMAART_GLOBAL_FIELDS = `
             </div>
         </div>`;
 
+const AB_DELAY_FIELDS = `
+        <div id="abDelayControls" style="display:none;">
+            <div class="sdpi-heading">A/B Delay Presets</div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Config A File</div>
+                <input class="sdpi-item-value" type="file" id="abConfigFileA" accept=".json,application/json" onchange="onAbConfigFileSelected('A', this)">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-message" id="abConfigStatusA">Config A: not loaded</div>
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Config B File</div>
+                <input class="sdpi-item-value" type="file" id="abConfigFileB" accept=".json,application/json" onchange="onAbConfigFileSelected('B', this)">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-message" id="abConfigStatusB">Config B: not loaded</div>
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Sample Rate (Hz)</div>
+                <input class="sdpi-item-value" type="number" id="abSampleRate" min="1" onchange="saveSettings(); updateAbDelayUi();">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Output Count</div>
+                <input class="sdpi-item-value" type="number" id="abOutputCount" min="1" max="64" onchange="saveSettings(); updateAbDelayUi();">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Use Digest Auth</div>
+                <input class="sdpi-item-value" type="checkbox" id="abAuthEnabled" onchange="saveSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Username</div>
+                <input class="sdpi-item-value" type="text" id="abAuthUser" onchange="saveSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-label">Password</div>
+                <input class="sdpi-item-value" type="password" id="abAuthPass" onchange="saveSettings()">
+            </div>
+            <div class="sdpi-item">
+                <div class="sdpi-item-message" id="abActiveStatus"></div>
+            </div>
+        </div>`;
+
 function buildScript(extraInit: string): string {
     return `
 let websocket = null;
@@ -162,6 +204,10 @@ function isPriorityAction() {
     return getActionName() === 'priority';
 }
 
+function isAbDelayAction() {
+    return getActionName() === 'lacoustics-ab-delay';
+}
+
 function getRequiredBackend() {
     var name = getActionName();
     if (name === 'priority' || name === 'lakeMute' || name === 'lakeLevel') {
@@ -177,7 +223,7 @@ function getRequiredBackend() {
 }
 
 function getRequiredCatalogAction() {
-    if (isSmaartAction()) {
+    if (isSmaartAction() || isAbDelayAction()) {
         return null;
     }
     if (isPresetAction()) {
@@ -249,7 +295,7 @@ function loadSettings(settings) {
     lastSettings = Object.assign({}, settings);
     const inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(function(input) {
-        if (!input.id || discoveryFields.includes(input.id)) return;
+        if (!input.id || input.type === 'file' || discoveryFields.includes(input.id)) return;
         if (input.type === 'checkbox') {
             input.checked = Boolean(settings[input.id]);
         } else {
@@ -281,20 +327,24 @@ function saveSettings() {
     var settings = {};
     var inputs = document.querySelectorAll('.sdpi-item-value');
     inputs.forEach(function(input) {
-        if (!input.id || discoveryFields.includes(input.id)) return;
+        if (!input.id || input.type === 'file' || discoveryFields.includes(input.id)) return;
         if (input.type === 'checkbox') {
             settings[input.id] = input.checked;
         } else {
             settings[input.id] = input.value;
         }
     });
-    var mergedSettings = Object.assign({}, settings, getDiscoveryFieldValues());
+    if (isAbDelayAction()) {
+        if (lastSettings.configA !== undefined) settings.configA = lastSettings.configA;
+        if (lastSettings.configB !== undefined) settings.configB = lastSettings.configB;
+        if (lastSettings.activePreset !== undefined) settings.activePreset = lastSettings.activePreset;
+    }
     websocket.send(JSON.stringify({
         type: 'setSettings',
         context: context,
-        settings: mergedSettings
+        settings: settings
     }));
-    lastSettings = Object.assign({}, mergedSettings);
+    lastSettings = Object.assign({}, settings);
     updateSelectors(settings.deviceId, settings.targetId);
     updateSmaartSplSelectors(settings.splStreamEndpoint, settings.splMetric);
 }
@@ -307,12 +357,6 @@ function saveGlobalSettings() {
         type: 'setGlobalSettings',
         settings: payload
     }));
-    websocket.send(JSON.stringify({
-        type: 'setSettings',
-        context: context,
-        settings: Object.assign({}, lastSettings, payload)
-    }));
-    lastSettings = Object.assign({}, lastSettings, payload);
     if (isSmaartSplAction()) {
         setTimeout(requestSmaartSplCatalog, 0);
     }
@@ -392,7 +436,7 @@ function refreshCatalog() {
 }
 
 function scheduleCatalogRefresh(delayMs = 400) {
-    if (!websocket || isSmaartAction()) return;
+    if (!websocket || isSmaartAction() || isAbDelayAction()) return;
     if (catalogRefreshTimer) {
         clearTimeout(catalogRefreshTimer);
     }
@@ -551,6 +595,130 @@ function applySmaartSplCatalog(nextCatalog) {
     updateSmaartSplSelectors(lastSettings.splStreamEndpoint, lastSettings.splMetric);
 }
 
+function onAbConfigFileSelected(presetId, inputEl) {
+    var file = inputEl.files && inputEl.files[0];
+    if (!file) return;
+
+    var reader = new FileReader();
+    reader.onload = function() {
+        var parsed = null;
+        var error = '';
+        try {
+            parsed = JSON.parse(String(reader.result));
+        } catch (parseError) {
+            error = 'invalid JSON (' + parseError.message + ')';
+        }
+        if (!error) {
+            var validation = validateAbDelayConfig(parsed, 'Config ' + presetId);
+            if (!validation.ok) {
+                error = validation.error;
+            } else {
+                parsed = validation.config;
+            }
+        }
+        if (error) {
+            setAbConfigStatus(presetId, error);
+            return;
+        }
+        lastSettings = Object.assign({}, lastSettings);
+        lastSettings['config' + presetId] = parsed;
+        delete lastSettings.activePreset;
+        saveSettings();
+        updateAbDelayUi();
+    };
+    reader.onerror = function() {
+        setAbConfigStatus(presetId, 'unable to read the selected file');
+    };
+    reader.readAsText(file);
+}
+
+function validateAbDelayConfig(value, label) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return { ok: false, error: label + ' is not a JSON object.' };
+    }
+    if (value.delayUnit !== undefined && value.delayUnit !== 'ms') {
+        return { ok: false, error: label + ' has unsupported delayUnit "' + value.delayUnit + '"; only "ms" is supported.' };
+    }
+    if (!Array.isArray(value.targets) || value.targets.length === 0) {
+        return { ok: false, error: label + ' must contain a non-empty "targets" array.' };
+    }
+    var targets = [];
+    for (var i = 0; i < value.targets.length; i++) {
+        var target = value.targets[i] || {};
+        var host = typeof target.host === 'string' ? target.host.trim() : '';
+        if (!host) {
+            return { ok: false, error: label + ' target ' + (i + 1) + ' is missing a "host" string.' };
+        }
+        if (typeof target.delayMs !== 'number' || !isFinite(target.delayMs)) {
+            return { ok: false, error: label + ' target ' + (i + 1) + ' (' + host + ') is missing a numeric "delayMs".' };
+        }
+        targets.push({ host: host, delayMs: target.delayMs });
+    }
+    return {
+        ok: true,
+        config: {
+            name: typeof value.name === 'string' ? value.name : '',
+            delayUnit: 'ms',
+            targets: targets
+        }
+    };
+}
+
+function applyAbDelayDefaults() {
+    var sampleRate = document.getElementById('abSampleRate');
+    if (sampleRate && !sampleRate.value) sampleRate.value = '96000';
+    var outputCount = document.getElementById('abOutputCount');
+    if (outputCount && !outputCount.value) outputCount.value = '4';
+    if (outputCount && Number(outputCount.value) > 64) outputCount.value = '64';
+    var user = document.getElementById('abAuthUser');
+    if (user && !user.value) user.value = 'admin';
+    var pass = document.getElementById('abAuthPass');
+    if (pass && !pass.value) pass.value = 'rest';
+}
+
+function updateAbDelayUi() {
+    if (!isAbDelayAction()) return;
+    applyAbDelayDefaults();
+    renderAbConfigStatus('A');
+    renderAbConfigStatus('B');
+    var statusEl = document.getElementById('abActiveStatus');
+    if (statusEl) {
+        var active = lastSettings.activePreset === 'A' || lastSettings.activePreset === 'B'
+            ? lastSettings.activePreset
+            : 'none yet';
+        statusEl.textContent = 'Active preset: ' + active + '. Key press applies the opposite preset.';
+    }
+}
+
+function renderAbConfigStatus(presetId) {
+    var config = lastSettings['config' + presetId];
+    var el = document.getElementById('abConfigStatus' + presetId);
+    if (!el) return;
+    if (!config || !Array.isArray(config.targets)) {
+        el.textContent = 'Config ' + presetId + ': not loaded';
+        return;
+    }
+    var sampleRateEl = document.getElementById('abSampleRate');
+    var sampleRate = Number(sampleRateEl && sampleRateEl.value) || 96000;
+    var outOfRange = config.targets.filter(function(target) {
+        var samples = Math.round(target.delayMs * sampleRate / 1000);
+        return samples < 0 || samples > 96000;
+    });
+    var text = 'Config ' + presetId + ': ' + (config.name || 'unnamed')
+        + ' (' + config.targets.length + ' target' + (config.targets.length === 1 ? '' : 's') + ')';
+    if (outOfRange.length > 0) {
+        text += ' - WARNING: ' + outOfRange.length + ' delay value(s) fall outside 0..96000 samples at ' + sampleRate + ' Hz';
+    }
+    el.textContent = text;
+}
+
+function setAbConfigStatus(presetId, message) {
+    var el = document.getElementById('abConfigStatus' + presetId);
+    if (el) {
+        el.textContent = 'Config ' + presetId + ': ' + message;
+    }
+}
+
 function onDeviceChange() {
     var newDeviceId = document.getElementById('deviceId').value;
     updateSelectors(newDeviceId, null);
@@ -562,7 +730,7 @@ function updateSelectors(selectedDeviceId, selectedTargetId) {
     var targetSelect = document.getElementById('targetId');
     var noDevices = document.getElementById('noDevices');
     if (!deviceSelect || !targetSelect) return;
-    if (isSmaartAction()) return;
+    if (isSmaartAction() || isAbDelayAction()) return;
 
     var currentDeviceId = deviceSelect.value || '';
     var currentTargetId = targetSelect.value || '';
@@ -804,7 +972,9 @@ export const KEY_HTML = `<!DOCTYPE html>
             </div>
         </div>
 
-        <div class="sdpi-heading">Action Options</div>
+${AB_DELAY_FIELDS}
+
+        <div class="sdpi-heading" id="actionOptionsHeading">Action Options</div>
         <div class="sdpi-item" id="muteOptions" style="display:none;">
             <div class="sdpi-item-label">Momentary</div>
             <input class="sdpi-item-value" type="checkbox" id="momentary" onchange="saveSettings()">
@@ -830,7 +1000,7 @@ export const KEY_HTML = `<!DOCTYPE html>
                 <option value="4">Force Priority 4</option>
             </select>
         </div>
-        <div class="sdpi-heading">Global Discovery Settings</div>
+        <div class="sdpi-heading" id="globalDiscoveryHeading">Global Discovery Settings</div>
 ${LAKE_GLOBAL_FIELDS}
 ${SMAART_GLOBAL_FIELDS}
     </div>
@@ -844,12 +1014,16 @@ function updateUI() {
     var smaartControls = document.getElementById('smaartControls');
     var smaartActionMessage = document.getElementById('smaartActionMessage');
     var smaartSplOptions = document.getElementById('smaartSplOptions');
+    var abDelayControls = document.getElementById('abDelayControls');
+    var actionOptionsHeading = document.getElementById('actionOptionsHeading');
+    var globalDiscoveryHeading = document.getElementById('globalDiscoveryHeading');
     var lakeGlobalSettings = document.getElementById('lakeGlobalSettings');
     var lakeBackendSettings = document.getElementById('lakeBackendSettings');
     var laBackendSettings = document.getElementById('laBackendSettings');
     var smaartGlobalSettings = document.getElementById('smaartGlobalSettings');
     var isSmaart = isSmaartAction();
     var isSmaartSpl = isSmaartSplAction();
+    var isAbDelay = isAbDelayAction();
     var requiredBackend = getRequiredBackend();
 
     if (muteOptions) {
@@ -865,8 +1039,17 @@ function updateUI() {
         priorityOptions.style.display = isPriorityAction() ? 'flex' : 'none';
     }
     if (targetControls && smaartControls) {
-        targetControls.style.display = isSmaart ? 'none' : 'block';
+        targetControls.style.display = isSmaart || isAbDelay ? 'none' : 'block';
         smaartControls.style.display = isSmaart ? 'block' : 'none';
+    }
+    if (abDelayControls) {
+        abDelayControls.style.display = isAbDelay ? 'block' : 'none';
+    }
+    if (actionOptionsHeading) {
+        actionOptionsHeading.style.display = isAbDelay ? 'none' : 'block';
+    }
+    if (globalDiscoveryHeading) {
+        globalDiscoveryHeading.style.display = isAbDelay ? 'none' : 'block';
     }
     if (smaartActionMessage) {
         smaartActionMessage.textContent = isSmaartSpl
@@ -877,19 +1060,20 @@ function updateUI() {
         smaartSplOptions.style.display = isSmaartSpl ? 'block' : 'none';
     }
     if (lakeGlobalSettings) {
-        lakeGlobalSettings.style.display = isSmaart ? 'none' : 'block';
+        lakeGlobalSettings.style.display = isSmaart || isAbDelay ? 'none' : 'block';
     }
     if (lakeBackendSettings) {
-        lakeBackendSettings.style.display = !isSmaart && requiredBackend !== 'la_http' ? 'block' : 'none';
+        lakeBackendSettings.style.display = !isSmaart && !isAbDelay && requiredBackend !== 'la_http' ? 'block' : 'none';
     }
     if (laBackendSettings) {
-        laBackendSettings.style.display = !isSmaart && requiredBackend !== 'lake' ? 'block' : 'none';
+        laBackendSettings.style.display = !isSmaart && !isAbDelay && requiredBackend !== 'lake' ? 'block' : 'none';
     }
     if (smaartGlobalSettings) {
         smaartGlobalSettings.style.display = isSmaart ? 'block' : 'none';
     }
 
     syncPriorityOptions();
+    updateAbDelayUi();
 }
 ${buildScript('updateUI();')}
     </script>

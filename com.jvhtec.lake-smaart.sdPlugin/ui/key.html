@@ -69,7 +69,7 @@
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Output Count</div>
-                <input class="sdpi-item-value" type="number" id="abOutputCount" min="1" max="64" onchange="saveSettings()">
+                <input class="sdpi-item-value" type="number" id="abOutputCount" min="1" max="64" onchange="saveSettings(); updateAbDelayUi();">
             </div>
             <div class="sdpi-item">
                 <div class="sdpi-item-label">Use Digest Auth</div>
@@ -397,15 +397,13 @@ function saveSettings() {
         if (lastSettings.configB !== undefined) settings.configB = lastSettings.configB;
         if (lastSettings.activePreset !== undefined) settings.activePreset = lastSettings.activePreset;
     }
-    const mergedSettings = Object.assign({}, settings, getDiscoveryFieldValues());
-
     websocket.send(JSON.stringify({
         event: 'setSettings',
         context: actionInfo.context,
-        payload: mergedSettings
+        payload: settings
     }));
 
-    lastSettings = Object.assign({}, mergedSettings);
+    lastSettings = Object.assign({}, settings);
     updateSelectors(settings.deviceId, settings.targetId);
     updateSmaartSplSelectors(settings.splStreamEndpoint, settings.splMetric);
 }
@@ -420,12 +418,6 @@ function saveGlobalSettings() {
         context: uuid,
         payload
     }));
-    websocket.send(JSON.stringify({
-        event: 'setSettings',
-        context: actionInfo.context,
-        payload: Object.assign({}, lastSettings, payload)
-    }));
-    lastSettings = Object.assign({}, lastSettings, payload);
 
     if (isSmaartSplAction()) {
         setTimeout(requestSmaartSplCatalog, 0);
@@ -865,6 +857,7 @@ function onAbConfigFileSelected(presetId, inputEl) {
         }
         lastSettings = Object.assign({}, lastSettings);
         lastSettings['config' + presetId] = parsed;
+        delete lastSettings.activePreset;
         saveSettings();
         updateAbDelayUi();
     };
@@ -911,6 +904,7 @@ function applyAbDelayDefaults() {
     if (sampleRate && !sampleRate.value) sampleRate.value = '96000';
     const outputCount = document.getElementById('abOutputCount');
     if (outputCount && !outputCount.value) outputCount.value = '4';
+    if (outputCount && Number(outputCount.value) > 64) outputCount.value = '64';
     const user = document.getElementById('abAuthUser');
     if (user && !user.value) user.value = 'admin';
     const pass = document.getElementById('abAuthPass');

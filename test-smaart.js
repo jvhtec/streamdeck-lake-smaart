@@ -1,7 +1,10 @@
 const WebSocket = require('ws');
-const ws = new WebSocket('ws://172.25.160.1:26000');
+const host = process.env.SMAART_HOST || '127.0.0.1';
+const port = process.env.SMAART_PORT || '26000';
+const url = `ws://${host}:${port}/api/v4/`;
+const ws = new WebSocket(url);
 
-console.log('Connecting to ws://172.25.160.1:26000');
+console.log(`Connecting to ${url}`);
 
 ws.on('open', () => {
   console.log('✓ Connected, waiting for messages...');

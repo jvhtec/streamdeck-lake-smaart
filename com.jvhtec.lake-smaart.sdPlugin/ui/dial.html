@@ -237,17 +237,6 @@ function getRequiredBackend() {
     return null;
 }
 
-function getRequiredBackend() {
-    const name = getActionName();
-    if (name === 'lakeLevel' || name === 'priority') {
-        return 'lake';
-    }
-    if (name === 'laLevel') {
-        return 'la_http';
-    }
-    return null;
-}
-
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
     uuid = inPropertyInspectorUUID;
     actionInfo = JSON.parse(inActionInfo);
@@ -333,15 +322,13 @@ function saveSettings() {
             settings[input.id] = input.value;
         }
     });
-    const mergedSettings = Object.assign({}, settings, getDiscoveryFieldValues());
-
     websocket.send(JSON.stringify({
         event: 'setSettings',
         context: actionInfo.context,
-        payload: mergedSettings
+        payload: settings
     }));
 
-    lastSettings = Object.assign({}, mergedSettings);
+    lastSettings = Object.assign({}, settings);
     updateSelectors(settings.deviceId, settings.targetId);
 }
 
@@ -355,12 +342,6 @@ function saveGlobalSettings() {
         context: uuid,
         payload
     }));
-    websocket.send(JSON.stringify({
-        event: 'setSettings',
-        context: actionInfo.context,
-        payload: Object.assign({}, lastSettings, payload)
-    }));
-    lastSettings = Object.assign({}, lastSettings, payload);
 
     scheduleCatalogRefresh();
 }

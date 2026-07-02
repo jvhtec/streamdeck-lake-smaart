@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
@@ -103,6 +104,23 @@ test('parseAbDelaySettings applies defaults and requires both configs', () => {
     assert.equal(parsed.settings.activePreset, undefined);
 });
 
+test('repo cardioid A/B preset files contain the expected twelve amp targets', () => {
+    const presetA = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'lacoustics-cardioid-preset-a.json'), 'utf8'));
+    const presetB = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'lacoustics-cardioid-preset-b.json'), 'utf8'));
+
+    const parsedA = validateAbDelayConfig(presetA, 'Config A');
+    const parsedB = validateAbDelayConfig(presetB, 'Config B');
+
+    assert.equal(parsedA.ok, true);
+    assert.equal(parsedB.ok, true);
+    assert.equal(parsedA.config.targets.length, 12);
+    assert.equal(parsedB.config.targets.length, 12);
+    assert.deepEqual(parsedA.config.targets[0], { host: '192.168.1.133', delayMs: 5.8 });
+    assert.deepEqual(parsedA.config.targets[11], { host: '192.168.1.36', delayMs: 5.8 });
+    assert.deepEqual(parsedB.config.targets[0], { host: '192.168.1.133', delayMs: 21.3 });
+    assert.deepEqual(parsedB.config.targets[11], { host: '192.168.1.36', delayMs: 21.3 });
+});
+
 test('applyAbDelayPreset posts one delay object per output to /api/control/dsp/output', async (t) => {
     const server = await startDelayServer();
     t.after(() => server.stop());
@@ -121,6 +139,20 @@ test('applyAbDelayPreset posts one delay object per output to /api/control/dsp/o
         { delay: 557 },
         { delay: 557 },
     ]);
+});
+
+test('applyAbDelayPreset clamps direct output counts to the supported maximum', async (t) => {
+    const server = await startDelayServer();
+    t.after(() => server.stop());
+
+    await applyAbDelayPreset(
+        { targets: [{ host: server.host, delayMs: 1 }] },
+        { sampleRate: 96000, outputCount: 100, authEnabled: false }
+    );
+
+    assert.equal(server.requests.length, 1);
+    assert.equal(server.requests[0].body.length, 64);
+    assert.deepEqual(server.requests[0].body[0], { delay: 96 });
 });
 
 test('applyAbDelayPreset rejects out-of-range delays before sending any request', async (t) => {

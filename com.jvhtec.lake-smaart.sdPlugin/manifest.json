@@ -7,7 +7,7 @@
             "UUID": "com.jvhtec.lake-smaart.lakeLevel",
             "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
-                "Knob"
+                "Encoder"
             ],
             "Encoder": {
                 "layout": "layouts/dialValue.json"
@@ -26,7 +26,7 @@
             "UUID": "com.jvhtec.lake-smaart.laLevel",
             "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
-                "Knob"
+                "Encoder"
             ],
             "Encoder": {
                 "layout": "layouts/dialValue.json"
@@ -156,7 +156,7 @@
             "UUID": "com.jvhtec.lake-smaart.smaartgengain",
             "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
-                "Knob"
+                "Encoder"
             ],
             "Encoder": {
                 "layout": "layouts/dialValue.json"
@@ -180,7 +180,7 @@
             "UUID": "com.jvhtec.lake-smaart.smaartfiletransport",
             "PropertyInspectorPath": "ui/dial.html",
             "Controllers": [
-                "Knob"
+                "Encoder"
             ],
             "Encoder": {
                 "layout": "layouts/dialValue.json"

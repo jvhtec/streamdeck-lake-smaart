@@ -16,6 +16,7 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 | L-Acoustics Level + Press-to-Mute (Dial) | ![L-Acoustics dial icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_la_dial.png) |
 | Lake Preset Recall | ![Lake preset icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_lake_preset.png) |
 | L-Acoustics Preset Recall | ![L-Acoustics preset icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_la_preset.png) |
+| L-Acoustics A/B Delay | ![L-Acoustics preset icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_la_preset.png) |
 | Lake Mute | ![Lake mute icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_lake_mute.png) |
 | L-Acoustics Mute | ![L-Acoustics mute icon](com.jvhtec.lake-smaart.sdPlugin/images/icon_la_mute.png) |
 | Lake Input Priority | ![Default action icon](com.jvhtec.lake-smaart.sdPlugin/images/actionDefault.png) |
@@ -35,6 +36,7 @@ The plugin ships with a set of action icons that appear on Stream Deck keys and 
 - Use dedicated `Lake` and `L-Acoustics` mute, level, and preset actions so each inspector only shows the relevant devices, targets, and backend discovery settings.
 - Force Lake input routers to `Auto`, `Priority 1`, `Priority 2`, `Priority 3`, or `Priority 4` from keys, including an optional push-count mode where one press selects `Priority 1`, two quick presses selects `Priority 2`, and so on. Router targets now include `All Routers` for frame-wide priority changes.
 - Recall Lake presets and L-Acoustics configurations from platform-specific key actions.
+- Apply L-Acoustics A/B delay preset files to explicit amp host lists, with all targets updated before the active preset marker flips.
 - Filter action device dropdowns to only the devices that have valid targets for that action on the selected NIC.
 - Adjust Smaart generator gain from a dial and press the dial to toggle the generator on or off.
 - Drive Smaart file-mode transport from a dial by sending configurable Windows hotkeys or short macros for previous, next, and play/pause.
@@ -99,7 +101,9 @@ Lake DLM port notes:
 
 `npm run build` also stages the runtime `ws` dependency inside `com.jvhtec.lake-smaart.sdPlugin/node_modules` so the copied plugin bundle can start outside the repo.
 
-For local Lake debugging without hardware, run `npm run lake:mock` and point the plugin to `127.0.0.1:6016`. Add `--router-count 16` when you want the mock to behave more like an LMX frame. For an automated codec and command-path check, run `npm run lake:selftest` or `npm run test:lake`.
+For a portable hardware-test bundle, see [USB test build guide](docs/USB_TEST_BUILD.md). Include both `lacoustics-cardioid-preset-a.json` and `lacoustics-cardioid-preset-b.json` with the plugin folder so the A/B Delay action can load them on the test computer.
+
+For local Lake debugging without hardware, run `npm run lake:mock` and point the plugin to `127.0.0.1:6016`. Add `--router-count 16` when you want the mock to behave more like an LMX frame. For automated checks, run `npm run lake:selftest`, `npm run test:lake`, `npm run test:core`, or `npm run test:smaart`.
 
 ## L-Acoustics verification
 

@@ -327,7 +327,11 @@ export class LaHttpBackend implements Backend {
             this.logDebug('No LA discovery subnet resolved; skipping subnet scan.');
             return [];
         }
-        return this.expandSubnet(this.settings.discoverySubnet);
+        const hosts = this.expandSubnet(this.settings.discoverySubnet);
+        if (hosts.length === 0) {
+            this.logDebug(`Unsupported or empty LA discovery subnet "${this.settings.discoverySubnet}". Use x.y.z.0/24, x.y.z.a-b, or CIDR prefixes /24 through /32.`);
+        }
+        return hosts;
     }
 
     private expandSubnet(subnet: string): string[] {
@@ -336,16 +340,37 @@ export class LaHttpBackend implements Backend {
             const base = match[1];
             const start = parseInt(match[2], 10);
             const end = parseInt(match[3], 10);
+            if (start < 0 || end > 255 || start > end) {
+                return [];
+            }
             const hosts: string[] = [];
             for (let i = start; i <= end; i++) {
                 hosts.push(`${base}.${i}`);
             }
             return hosts;
         }
-        const cidrMatch = subnet.match(/^(\d+\.\d+\.\d+)\.0\/24$/);
+        const cidrMatch = subnet.match(/^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/);
         if (cidrMatch) {
-            const base = cidrMatch[1];
-            return Array.from({ length: 254 }, (_, i) => `${base}.${i + 1}`);
+            const addressInt = ipv4ToInt(cidrMatch[1]);
+            const prefixLength = parseInt(cidrMatch[2], 10);
+            if (addressInt === null || prefixLength < 24 || prefixLength > 32) {
+                return [];
+            }
+
+            const mask = prefixLengthToMask(prefixLength);
+            if (mask === null) {
+                return [];
+            }
+
+            const network = (addressInt & mask) >>> 0;
+            const broadcast = (network | (~mask >>> 0)) >>> 0;
+            const firstHost = prefixLength >= 31 ? network : network + 1;
+            const lastHost = prefixLength >= 31 ? broadcast : broadcast - 1;
+            const hosts: string[] = [];
+            for (let address = firstHost; address <= lastHost; address++) {
+                hosts.push(intToIpv4(address >>> 0));
+            }
+            return hosts;
         }
         return [];
     }
@@ -670,4 +695,40 @@ function safeParseConfigurationLibrary(value: unknown): LaConfigurationSlot[] | 
 
 function buildIndexedMemberIds(family: LaP1IndexedInputFamily, start: number, end: number): string[] {
     return Array.from({ length: end - start + 1 }, (_, offset) => `${family}:${start + offset}`);
+}
+
+function ipv4ToInt(address: string): number | null {
+    const octets = address.split('.');
+    if (octets.length !== 4) {
+        return null;
+    }
+
+    let value = 0;
+    for (const octet of octets) {
+        const numeric = Number(octet);
+        if (!Number.isInteger(numeric) || numeric < 0 || numeric > 255) {
+            return null;
+        }
+        value = (value << 8) | numeric;
+    }
+    return value >>> 0;
+}
+
+function prefixLengthToMask(prefixLength: number): number | null {
+    if (!Number.isInteger(prefixLength) || prefixLength < 0 || prefixLength > 32) {
+        return null;
+    }
+    if (prefixLength === 0) {
+        return 0;
+    }
+    return (0xffffffff << (32 - prefixLength)) >>> 0;
+}
+
+function intToIpv4(value: number): string {
+    return [
+        (value >>> 24) & 255,
+        (value >>> 16) & 255,
+        (value >>> 8) & 255,
+        value & 255,
+    ].join('.');
 }

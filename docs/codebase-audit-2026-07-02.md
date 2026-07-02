@@ -226,7 +226,10 @@ the bind with backoff, or recreating the socket when `socketReady` is rejected.
    `"Encoder"`; `"Knob"` appears to target Mirabox/Soomfon "Stream Dock" software (consistent with
    the `STREAMDOCK_HOTKEY_PAYLOAD` env var and the Soomfon doc in `docs/`). If the plugin is ever
    meant to load in genuine Stream Deck software, the dial actions won't be listed for encoders.
-   Worth a comment in the manifest or docs stating which host software is targeted.
+   Worth a comment in the manifest or docs stating which host software is targeted. Source metadata:
+   Elgato manifest/dial docs are recorded in `docs/streamdeck-api.md` (retrieved 2026-07-02);
+   Soomfon layout source metadata is recorded in `docs/soomfon-stream-controller-se.md`
+   (retrieved 2026-01-14).
 
 3. **Poll cadence.** 300 ms polling of every bound target (multiplied by per-channel Lake reads)
    is aggressive for show networks. Consider per-backend cadences (Lake UDP is cheap-ish; LA HTTP

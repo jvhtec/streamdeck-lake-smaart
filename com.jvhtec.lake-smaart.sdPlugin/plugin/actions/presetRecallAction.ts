@@ -51,6 +51,7 @@ export class PresetRecallAction implements Action {
     onWillDisappear(event: WillDisappearEvent): void {
         this.deviceManager.unregisterBinding(event.context);
         this.contextTargets.delete(event.context);
+        this.lastPress.delete(event.context);
     }
 
     onDidReceiveSettings(event: IncomingEvent): void {
@@ -87,6 +88,7 @@ export class PresetRecallAction implements Action {
 
         try {
             await this.deviceManager.recallPreset(targetId);
+            this.lastPress.delete(e.context);
             this.sdClient.showOk(e.context);
         } catch (error) {
             this.sdClient.showAlert(e.context);
